@@ -1,0 +1,45 @@
+name: paytime
+services:
+  web:
+    container_name: paytime-front
+    build:
+      context: ./paytime-front
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    networks:
+      - frontend-network
+    volumes:
+      - ./paytime-front:/app:delegated
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - api
+
+  api:
+    container_name: paytime-back
+    build:
+      context: ./paytime-back
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGO_URI=mongodb+srv://elfilalyabdeljalil:jGq8BeJbQEB3g6rL@cluster0.yn0nm.mongodb.net/Paytime?retryWrites=true&w=majority&appName=Cluster0
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./paytime-back:/app:delegated
+      - /app/node_modules
+    networks:
+      - backend-network
+      - frontend-network
+
+networks:
+  frontend-network:
+    name: frontend-network
+    driver: bridge
+  backend-network:
+    name: backend-network
+    driver: bridge
