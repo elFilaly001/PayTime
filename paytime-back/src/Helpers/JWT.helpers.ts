@@ -64,13 +64,28 @@ export class JWTHelperService {
         return this.createToken(userId, this.configService.get('JWT_EMAIL_VERIFICATION_TIME'));
     }
 
-    verifyToken(token: string): any {
-        const decoded = jwt.decode(token, { complete: true });
-        if (!decoded?.header?.kid) throw new UnauthorizedException();
+    async verifyToken(token: string): Promise<any> {
+        try {
+            const decoded = jwt.decode(token, { complete: true });
+            if (!decoded?.header?.kid) {
+                this.logger.error('Token does not contain a valid kid');
+                throw new UnauthorizedException();
+            }
 
-        const keyPair = this.keyManager.findKeyById(decoded.header.kid);
-        if (!keyPair) throw new UnauthorizedException();
+            const keyPair = await this.keyManager.findKeyById(decoded.header.kid);
+            if (!keyPair) {
+                this.logger.error(`No key found for kid: ${decoded.header.kid}`);
+                throw new UnauthorizedException();
+            }
 
-        return jwt.verify(token, keyPair.key, { algorithms: [keyPair.algorithm] });
+            this.logger.log(`Verifying token with key id: ${keyPair.id} and algorithm: ${keyPair.algorithm}`);
+
+            const verifiedToken = jwt.verify(token, keyPair.key, { algorithms: [keyPair.algorithm] });
+            this.logger.log('Token verified successfully ' , verifiedToken.sub);
+            return verifiedToken.sub;
+        } catch (error) {
+            this.logger.error('Error verifying token:', error);
+            throw new UnauthorizedException('Invalid token');
+        }
     }
 }

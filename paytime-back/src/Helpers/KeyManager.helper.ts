@@ -39,10 +39,6 @@ export class KeyManagerService {
     // Public methods needed for JWT.helpers.ts
     async getCurrentKey(): Promise<KeyPair> {
         const keys = await this.loadKeyStore();
-
-        // this.logger.debug('Current key check:', {
-        //     keys
-        // })
         const activeKeys = this.getActiveKeys();
 
         if(keys.length === 0) {
@@ -60,8 +56,9 @@ export class KeyManagerService {
         );
     }
 
-    findKeyById(keyId: string): KeyPair | undefined {
-        return this.GetAllKeys().find(key => key.id === keyId);
+    async findKeyById(kid: string): Promise<KeyPair | undefined> {
+        await this.getCurrentKey();
+        return this.keyStore.keys.find(key => key.id === kid && key.active);
     }
 
     private GenerateNewKey(): KeyPair {
@@ -69,7 +66,7 @@ export class KeyManagerService {
         const key = crypto.randomBytes(32).toString('hex');
         const now = new Date();
         const expiry = new Date(now);
-        expiry.setDate(expiry.getDate() + 30); // 30 days expiry
+        expiry.setDate(expiry.getDate() + 30); 
 
         // Define a list of algorithms to rotate between
         const algorithms: Algorithm[] = ['HS256', 'HS384', 'HS512'];

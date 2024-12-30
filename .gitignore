@@ -60,5 +60,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 paytime-back/.env
 paytime-back/keys.json
 paytime-back/node_modules
+
 paytime-front/.env
 paytime-front/node_modules

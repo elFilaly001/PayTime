@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dtos/Auth.dto';
 import { UseInterceptors } from '@nestjs/common';
@@ -22,5 +22,10 @@ export class AuthController {
     return this.authService.Login(Data);
   }
 
+
+  @Get("refresh/:token")
+  RefreshToken(@Param("token") RefreshToken : string){ 
+    return this.authService.RefreshToken(RefreshToken);
+  }
 
 }

@@ -34,11 +34,14 @@ export class AuthService {
 
     async RefreshToken(RefreshToken: string) {
         try {
-            const user = this.jwtHelper.verifyToken(RefreshToken);
-            const AccessToken = this.jwtHelper.createAccessToken(user);
-            return {User: user, Refresh: RefreshToken, Access: AccessToken};
+            const user = await this.jwtHelper.verifyToken(RefreshToken);
+            const AccessToken = await this.jwtHelper.createAccessToken(user);
+            return { Access: AccessToken };
         } catch (error) {
             throw error;
         }
     }
+
+    
+
 }
