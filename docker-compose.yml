@@ -1,4 +1,5 @@
 name: paytime
+
 services:
   web:
     container_name: paytime-front
@@ -26,7 +27,17 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - MONGO_URI=mongodb+srv://elfilalyabdeljalil:jGq8BeJbQEB3g6rL@cluster0.yn0nm.mongodb.net/Paytime?retryWrites=true&w=majority&appName=Cluster0
+      - MONGO_URI=${MONGO_URI}
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USER=your-email@example.com
+      - SMTP_PASSWORD=your-password
+      - MAIL_FROM_NAME=Your App Name
+      - MAIL_FROM_ADDRESS=noreply@yourapp.com
+      - APP_URL=https://yourapp.com
+      - JWT_REFRESH_TIME=${JWT_REFRESH_TIME}
+      - JWT_ACCESS_TIME=${JWT_ACCESS_TIME}
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     volumes:
