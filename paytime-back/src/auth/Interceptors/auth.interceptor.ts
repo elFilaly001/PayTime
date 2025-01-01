@@ -1,5 +1,6 @@
 import { BadRequestException, CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import {HashPassword} from '../../Helpers/Auth.helper';
 
 @Injectable()
 export class AuthInterceptor implements NestInterceptor {
@@ -19,6 +20,7 @@ export class AuthInterceptor implements NestInterceptor {
       
       const {ConfirmPassword, ...user} = request.body;
       request.body = user;
+      user.Password = HashPassword(user.Password);
 
       return next.handle();
     } catch (error) {

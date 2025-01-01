@@ -1,29 +1,50 @@
-import nodemailer from 'nodemailer';
+import * as nodemailer from 'nodemailer';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class MailHelper {
     private readonly logger = new Logger(MailHelper.name);
     private transporter: nodemailer.Transporter;
 
-    constructor(private configService: ConfigService,) {
+    constructor(private configService: ConfigService) {
+        const host = this.configService.get<string>('SMTP_HOST');
+        const port = parseInt(this.configService.get<string>('SMTP_PORT'));
+        const user = this.configService.get<string>('SMTP_USER');
+        const pass = this.configService.get<string>('SMTP_PASSWORD');
+
+        // Log SMTP configuration (remove in production)
+        this.logger.debug(`Initializing SMTP with host: ${host}, port: ${port}`);
+
         this.transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
+            host: host,
+            port: port,
+            secure: false,
             auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
+                user: user,
+                pass: pass,
             },
+           
+            logger: true,
+            debug: true 
+        });
+
+        this.transporter.verify((error, success) => {
+            if (error) {
+                this.logger.error(`SMTP connection failed: ${error.message}`);
+            } else {
+                this.logger.log('SMTP connection successful');
+            }
         });
     }
 
     async sendVerificationEmail(email: string, verificationToken: string): Promise<boolean> {
         try {
-            const verificationLink = `${process.env.APP_URL}/verify-email?token=${verificationToken}`;
+            const verificationLink = `${this.configService.get<string>('APP_URL')}/verify-email?token=${verificationToken}`;
 
             await this.transporter.sendMail({
-                from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM_ADDRESS}>`,
+                from: `"${this.configService.get<string>('MAIL_FROM_NAME')}" <${this.configService.get<string>('MAIL_FROM_ADDRESS')}>`,
                 to: email,
                 subject: "Verify Your Email Address",
                 html: `

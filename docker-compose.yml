@@ -28,14 +28,11 @@ services:
       - "3000:3000"
     environment:
       - MONGO_URI=${MONGO_URI}
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_SECURE=false
-      - SMTP_USER=your-email@example.com
-      - SMTP_PASSWORD=your-password
-      - MAIL_FROM_NAME=Your App Name
-      - MAIL_FROM_ADDRESS=noreply@yourapp.com
-      - APP_URL=https://yourapp.com
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_SECURE=${SMTP_SECURE}
       - JWT_REFRESH_TIME=${JWT_REFRESH_TIME}
       - JWT_ACCESS_TIME=${JWT_ACCESS_TIME}
       - NODE_ENV=development

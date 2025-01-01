@@ -55,7 +55,7 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-
+*/keys.json
 
 paytime-back/.env
 paytime-back/keys.json
