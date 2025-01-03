@@ -5,36 +5,23 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class MailHelper {
-    private readonly logger = new Logger(MailHelper.name);
     private transporter: nodemailer.Transporter;
+    private readonly logger = new Logger(MailHelper.name);
 
     constructor(private configService: ConfigService) {
-        const host = this.configService.get<string>('SMTP_HOST');
-        const port = parseInt(this.configService.get<string>('SMTP_PORT'));
-        const user = this.configService.get<string>('SMTP_USER');
-        const pass = this.configService.get<string>('SMTP_PASSWORD');
-
-        // Log SMTP configuration (remove in production)
-        this.logger.debug(`Initializing SMTP with host: ${host}, port: ${port}`);
-
         this.transporter = nodemailer.createTransport({
-            host: host,
-            port: port,
-            secure: false,
+            service: 'gmail',
             auth: {
-                user: user,
-                pass: pass,
-            },
-           
-            logger: true,
-            debug: true 
+                user: this.configService.get<string>('SMTP_USER'),
+                pass: this.configService.get<string>('SMTP_PASSWORD')
+            }
         });
 
         this.transporter.verify((error, success) => {
             if (error) {
-                this.logger.error(`SMTP connection failed: ${error.message}`);
+                this.logger.error('SMTP connection error:', error);
             } else {
-                this.logger.log('SMTP connection successful');
+                this.logger.log('SMTP server is ready to take our messages');
             }
         });
     }
@@ -42,9 +29,12 @@ export class MailHelper {
     async sendVerificationEmail(email: string, verificationToken: string): Promise<boolean> {
         try {
             const verificationLink = `${this.configService.get<string>('APP_URL')}/verify-email?token=${verificationToken}`;
+            
+            const fromName = this.configService.get<string>('MAIL_FROM_NAME');
+            const fromAddress = this.configService.get<string>('MAIL_FROM_ADDRESS');
 
-            await this.transporter.sendMail({
-                from: `"${this.configService.get<string>('MAIL_FROM_NAME')}" <${this.configService.get<string>('MAIL_FROM_ADDRESS')}>`,
+            const mailOptions = {
+                from: `${fromName} <${this.configService.get<string>('SMTP_USER')}>`,
                 to: email,
                 subject: "Verify Your Email Address",
                 html: `
@@ -53,8 +43,10 @@ export class MailHelper {
                     <a href="${verificationLink}">Verify Email</a>
                     <p>If you didn't create an account, you can ignore this email.</p>
                     <p>This link will expire in 24 hours.</p>
-                `,
-            });
+                `
+            };
+
+            const info = await this.transporter.sendMail(mailOptions);
 
             this.logger.log(`Verification email sent to ${email}`);
             return true;

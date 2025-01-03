@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dtos/Auth.dto';
 import { UseInterceptors } from '@nestjs/common';
 import { AuthInterceptor } from './Interceptors/auth.interceptor';
 import { LoginDto } from './dtos/Auth.dto';
+import { Response, Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -18,14 +19,14 @@ export class AuthController {
 
 
   @Post("login")
-  Login(@Body() Data : LoginDto){ 
-    return this.authService.Login(Data);
+  Login(@Body() Data : LoginDto, @Res({ passthrough: true }) res: Response){ 
+    return this.authService.Login(Data, res);
   }
 
 
-  @Get("refresh/:token")
-  RefreshToken(@Param("token") RefreshToken : string){ 
-    return this.authService.RefreshToken(RefreshToken);
+  @Get("refresh")
+  RefreshToken(@Req() req: Request) {
+    return this.authService.RefreshToken(req);
   }
 
 

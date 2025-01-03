@@ -17,7 +17,7 @@ async function Exist(Model: any, fields: Object, shouldExist: boolean): Promise<
             }
         } else {
             if (!DataExist) {
-                throw new BadRequestException(`Expectes ${fieldEntries}`);
+                throw new BadRequestException(`${fieldEntries} does not exist `);
             }else{
 
                 return DataExist ;
