@@ -5,6 +5,8 @@ import { UseInterceptors } from '@nestjs/common';
 import { AuthInterceptor } from './Interceptors/auth.interceptor';
 import { LoginDto } from './dtos/Auth.dto';
 import { Response, Request } from 'express';
+import { getDeviceInfo } from '../Helpers/Device.helper';
+import { VerifyOtpDto } from './dtos/Auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -13,23 +15,35 @@ export class AuthController {
 
   @UseInterceptors(AuthInterceptor) 
   @Post("register")
-  Rgister(@Body() Data : RegisterDto){ 
-    return this.authService.Register(Data);
+  Rgister(@Body() Data : RegisterDto, @Req() req: Request){ 
+    return this.authService.Register(Data, req);
   }
 
 
   @Post("login")
-  Login(@Body() Data : LoginDto, @Res({ passthrough: true }) res: Response){ 
-    return this.authService.Login(Data, res);
+  Login(@Body() Data : LoginDto, @Res({ passthrough: true }) res: Response, @Req() req: Request ){ 
+    return this.authService.Login(Data, res, req);
   }
 
 
   @Get("refresh")
-  RefreshToken(@Req() req: Request) {
+    RefreshToken(@Req() req: Request) {
     return this.authService.RefreshToken(req);
   }
 
+  // @Get('device-info')
+  // getDeviceInfo(@Req() request: Request) {
+  //   const deviceInfo = getDeviceInfo(request);
+  //   return deviceInfo;
+  // }
 
-  
+  @Post("verify-otp")
+  async verifyOtp(
+    @Body() verifyOtpDto: VerifyOtpDto,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request
+  ) {
+    return this.authService.verifyOtp(verifyOtpDto, res, req);
+  }
 
 }

@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule ,ConfigService } from '@nestjs/config';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { ConfigModule ,ConfigService } from '@nestjs/config';
       },
       inject: [ConfigService],
     }),
-    AuthModule , AuthModule],
+    AuthModule , AuthModule, RedisModule],
   controllers: [AppController],
   providers: [AppService],
 })

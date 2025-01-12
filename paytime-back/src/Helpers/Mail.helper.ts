@@ -55,4 +55,33 @@ export class MailHelper {
             return false;
         }
     }
+    
+    async sendOTPEmail(email: string, otp: string): Promise<boolean> {
+        try {
+            const subject = 'Your OTP Code';
+            const text = `Your OTP code is: ${otp}`;
+            const fromName = this.configService.get<string>('MAIL_FROM_NAME');
+            const fromAddress = this.configService.get<string>('MAIL_FROM_ADDRESS');
+
+            const mailOptions = {
+                from: `${fromName} <${this.configService.get<string>('SMTP_USER')}>`,
+                to: email,
+                subject: "Verify Your Email Address",
+                html: `
+                    <h1>OTP Verification</h1>
+                    <p>Your OTP code is: <strong>${otp}</strong></p>
+                    <p>Please enter this code in the application to verify your email address.</p>
+                    <p>If you didn't request this code, you can ignore this email.</p>
+                    <p>This OTP will expire in 5 minutes.</p>
+                `
+            };
+
+            await this.transporter.sendMail(mailOptions);
+            return true;
+        } catch (error) {
+            this.logger.error(`Failed to send OTP email to ${email}: ${error.message}`);
+            return false;
+        }
+
+    } 
 }

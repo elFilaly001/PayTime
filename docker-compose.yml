@@ -42,12 +42,27 @@ services:
       - JWT_EMAIL_VERIFICATION_TIME=${JWT_EMAIL_VERIFICATION_TIME}
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
     volumes:
       - ./paytime-back:/app:delegated
       - /app/node_modules
     networks:
       - backend-network
       - frontend-network
+    depends_on:
+      - redis
+
+  redis:
+    container_name: paytime-redis
+    image: redis:latest
+    ports:
+      - "6379:6379" 
+    networks:
+      - backend-network
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
 
 networks:
   frontend-network:
@@ -56,3 +71,6 @@ networks:
   backend-network:
     name: backend-network
     driver: bridge
+
+volumes:
+  redis_data:

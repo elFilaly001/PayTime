@@ -1,14 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { RegisterDto, LoginDto } from './dtos/Auth.dto';
+import { RegisterDto, LoginDto, VerifyOtpDto } from './dtos/Auth.dto';
 import { Exist } from 'src/Helpers/Exist.helper';
 import { JWTHelperService } from 'src/Helpers/JWT.helpers';
-import  {MailHelper}  from 'src/Helpers/Mail.helper';
+import { MailHelper } from 'src/Helpers/Mail.helper';
 import { ConfigService } from '@nestjs/config';
-import {VerifyPassword} from 'src/Helpers/Auth.helper';
+import { VerifyPassword } from 'src/Helpers/Auth.helper';
 import { getCookie, setCookie } from 'src/Helpers/Cookies.helper';
-import { Response, Request } from 'express';
+import { Response, Request, request } from 'express';
 import { Logger } from '@nestjs/common';
+import { OTPHelper } from 'src/Helpers/OTP.helper';
+import { RedisService } from 'src/redis/redis.service';
+import { getDeviceInfo, isDeviceRecognized } from 'src/Helpers/Device.helper';
+
 
 @Injectable()
 export class AuthService {
@@ -17,88 +21,123 @@ export class AuthService {
     constructor(
         @InjectModel('Auth') private readonly AuthModel: any,
         private jwtHelper: JWTHelperService,
-        private configService: ConfigService
+        private configService: ConfigService,
+        private mailHelper: MailHelper,
+        private otpHelper: OTPHelper,
+        private redisService: RedisService
 
 
-    ) {}
-    
-    async Register(Data: RegisterDto) {
+    ) {
 
-        await Exist(this.AuthModel, { Username: Data.Username , Email: Data.Email }, false);
-        
+        this.mailHelper = new MailHelper(this.configService);
+
+    }
+
+    async Register(Data: RegisterDto, request: Request) {
+
+        await Exist(this.AuthModel, { Username: Data.Username, Email: Data.Email }, false);
+
         try {
-            
-            // Create user within the transaction
-            const user = await this.AuthModel.create(Data );
-            
-            // Generate verification token
-            const verification_token = await this.jwtHelper.createEmailVerificationToken(user.id);
-            
-            // Send verification email
-            const mailHelper = new MailHelper(this.configService);
-            
-            const emailSent = await mailHelper.sendVerificationEmail(user.Email, verification_token);
-            
-            if (!emailSent) {
-                // If email sending fails, rollback the transaction
-                throw new Error('Failed to send verification email');
+
+            const user = await this.AuthModel.create(Data);
+
+            return {
+                User: {
+                    Username: user.Username,
+                    Email: user.Email,
+                    Role: user.Role,
+                    isVerified: user.isVerified,
+                    Friend_Code: user.Friend_Code,
+                    Friend_list: user.Friend_list,
+                    Friend_requests: user.Friend_requests
+                }
+            };
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async Login(Data: LoginDto, res: Response, request: Request) {
+        // Verify user exists in database
+        const user = await Exist(this.AuthModel, { Email: Data.Email }, true);
+
+        try {
+            // Check if user is banned
+            if (user.isBanned) {
+                throw new BadRequestException('This account has been banned. Please contact support for more information.');
             }
-            
-            return {User: {
-                Username: user.Username,
-                Email: user.Email,
-                Role: user.Role,
-                isVerified: user.isVerified,
-                Friend_Code: user.Friend_Code,
-                Friend_list: user.Friend_list,
-                Friend_requests: user.Friend_requests
-            }};
-            
-        } catch (error) {
-            throw error;
-        }
-    }
 
-    async Login(Data: LoginDto, res: Response) {
-       
-        
-        try {
+            // Check if user is deleted
+            if (user.isDeleted) {
+                throw new BadRequestException('This account has been deleted.');
+            }
 
-            // Verify user exists in database (pass session to ensure transaction consistency)
-            const user = await Exist(this.AuthModel, { Email: Data.Email }, true);
             // Check password validity
-            if (!VerifyPassword(Data.Password, user.Password)) throw new BadRequestException('Invalid Password');
+            if (!VerifyPassword(Data.Password, user.Password)) {
+                throw new BadRequestException('Invalid Password');
+            }
+
+            const deviceInfo = getDeviceInfo(request);
             
-            // Generate tokens
-            const RefreshToken = await this.jwtHelper.createRefreshToken(user.id);
-            const AccessToken = await this.jwtHelper.createAccessToken(user.id);
+            // Always require OTP for unverified users
+            if (!user.isVerified) {
+                const otp = await this.otpHelper.generateOtp(user.id);
+                await this.redisService.set(`otp:${user.id}`, otp);
+                await this.mailHelper.sendOTPEmail(user.Email, otp);
 
-            // Set refresh token in HTTP-only cookie
-            setCookie(res, "refreshToken", RefreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days
-            });
+                return {
+                    requiresOTP: true,
+                    userId: user.id,
+                    message: 'Please verify your email. OTP has been sent to your email address.'
+                };
+            }
 
+            // For verified users, check device recognition
+            if (user.Devices && user.Devices.length > 0 && isDeviceRecognized(user, deviceInfo)) {
+                // Generate tokens only for recognized devices
+                const RefreshToken = await this.jwtHelper.createRefreshToken(user.id);
+                const AccessToken = await this.jwtHelper.createAccessToken(user.id);
 
-            // Return user data and access token
-            return { User: {
-                Username: user.Username,
-                Email: user.Email,
-                Role: user.Role,
-                isVerified: user.isVerified,
-                Friend_Code: user.Friend_Code,
-                Friend_list: user.Friend_list,
-                Friend_requests: user.Friend_requests
-            }, Access: AccessToken };
+                setCookie(res, "refreshToken", RefreshToken, {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict',
+                    maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days
+                });
+
+                return {
+                    requiresOTP: false,
+                    User: {
+                        Username: user.Username,
+                        Email: user.Email,
+                        Role: user.Role,
+                        isVerified: user.isVerified,
+                        Friend_Code: user.Friend_Code,
+                        Friend_list: user.Friend_list,
+                        Friend_requests: user.Friend_requests
+                    },
+                    Access: AccessToken
+                };
+            }
+
+            // For unrecognized devices, generate and send OTP
+            const otp = await this.otpHelper.generateOtp(user.id);
+            await this.redisService.set(`otp:${user.id}`, otp);
+            await this.mailHelper.sendOTPEmail(user.Email, otp);
+
+            // Return only the necessary information for OTP verification
+            return {
+                requiresOTP: true,
+                userId: user.id,
+                message: 'OTP has been sent to your email'
+            };
 
         } catch (error) {
             throw error;
         }
-    }
-
-
+    } 
+    
     async RefreshToken(req: Request) {
         try {
             const RefreshToken = getCookie(req);
@@ -110,6 +149,101 @@ export class AuthService {
         }
     }
 
-    
+    async verifyLoginOTP(userId: string, otp: string, deviceInfo: any) {
+        const isValid = await this.otpHelper.verifyOtp(userId, otp);
+        if (!isValid) {
+            throw new BadRequestException('Invalid OTP');
+        }
+
+        // Add the device to user's devices list
+        await this.AuthModel.findByIdAndUpdate(userId, {
+            $push: {
+                Devices: {
+                    ...deviceInfo,
+                    lastUsedAt: new Date()
+                }
+            }
+        });
+
+        // Generate tokens and complete login
+        const RefreshToken = await this.jwtHelper.createRefreshToken(userId);
+        const AccessToken = await this.jwtHelper.createAccessToken(userId);
+
+        return {
+            RefreshToken,
+            AccessToken
+        };
+    }
+
+    async verifyOtp(verifyOtpDto: VerifyOtpDto, res: Response, request: Request) {
+        const session = await this.AuthModel.startSession();
+        session.startTransaction();
+
+        try {
+            const { userId, otp } = verifyOtpDto;
+            
+            // Verify user exists
+            const user = await this.AuthModel.findById(userId);
+            if (!user) {
+                throw new BadRequestException('User not found');
+            }
+
+            // Verify OTP
+            const isValid = await this.redisService.verifyOtp(userId, otp);
+            if (!isValid) {
+                throw new BadRequestException('Invalid OTP');
+            }
+
+            // Add the device to user's devices list and update verification status
+            const deviceInfo = getDeviceInfo(request);
+            const updatedUser = await this.AuthModel.findByIdAndUpdate(
+                userId,
+                {
+                    $push: {
+                        Devices: {
+                            ...deviceInfo,
+                            lastUsedAt: new Date()
+                        }
+                    },
+                    isVerified: true, // Set user as verified
+                    lastLogin: new Date()
+                },
+                { session, new: true } // Return the updated document
+            );
+
+            // Generate tokens only after successful OTP verification
+            const RefreshToken = await this.jwtHelper.createRefreshToken(userId);
+            const AccessToken = await this.jwtHelper.createAccessToken(userId);
+
+            // Set refresh token in HTTP-only cookie
+            setCookie(res, "refreshToken", RefreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days
+            });
+
+            await session.commitTransaction();
+            session.endSession();
+
+            return {
+                User: {
+                    Username: updatedUser.Username,
+                    Email: updatedUser.Email,
+                    Role: updatedUser.Role,
+                    isVerified: updatedUser.isVerified, // This will now be true
+                    Friend_Code: updatedUser.Friend_Code,
+                    Friend_list: updatedUser.Friend_list,
+                    Friend_requests: updatedUser.Friend_requests
+                },
+                Access: AccessToken
+            };
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
+        }
+    }
 
 }
+
