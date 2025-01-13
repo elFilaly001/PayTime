@@ -88,4 +88,9 @@ export class JWTHelperService {
             throw new UnauthorizedException('Invalid token');
         }
     }
+
+
+    async decodeToken(token: string): Promise<any> {
+        return jwt.decode(token);
+    }
 }

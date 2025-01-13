@@ -16,3 +16,7 @@ export class VerifyOtpDto {
     userId: string;
     otp: string;
 }
+
+export class ResetPasswordEmailDto {
+    email: string;
+}

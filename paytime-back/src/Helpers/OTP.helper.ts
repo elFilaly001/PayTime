@@ -11,9 +11,4 @@ export class OTPHelper {
         await this.redisService.storeOtp(userId, otp);
         return otp ;
     }
-
-    async verifyOtp(userId: string, otp: string) {
-        const storedOtp = await this.redisService.getOtp(userId);
-        return storedOtp === otp;
-    }
 }

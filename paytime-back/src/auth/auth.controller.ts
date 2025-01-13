@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dtos/Auth.dto';
+import { RegisterDto, ResetPasswordEmailDto } from './dtos/Auth.dto';
 import { UseInterceptors } from '@nestjs/common';
 import { AuthInterceptor } from './Interceptors/auth.interceptor';
 import { LoginDto } from './dtos/Auth.dto';
@@ -44,6 +44,16 @@ export class AuthController {
     @Req() req: Request
   ) {
     return this.authService.verifyOtp(verifyOtpDto, res, req);
+  }
+
+  @Post("send-reset-password-email")
+  async sendResetPasswordEmail(@Body() resetPasswordEmailDto: ResetPasswordEmailDto) {
+    return this.authService.sendResetPasswordEmail(resetPasswordEmailDto.email);
+  }
+
+  @Post("reset-password")
+  async resetPassword(@Body("token") token: string, @Body("password") password: string) {
+    return this.authService.resetPassword(token, password);
   }
 
 }

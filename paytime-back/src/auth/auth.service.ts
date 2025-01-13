@@ -5,7 +5,7 @@ import { Exist } from '../Helpers/Exist.helper';
 import { JWTHelperService } from '../Helpers/JWT.helpers';
 import { MailHelper } from '../Helpers/Mail.helper';
 import { ConfigService } from '@nestjs/config';
-import { VerifyPassword } from '../Helpers/Auth.helper';
+import { HashPassword, VerifyPassword } from '../Helpers/Auth.helper';
 import { getCookie, setCookie } from '../Helpers/Cookies.helper';
 import { Response, Request, request } from 'express';
 import { Logger } from '@nestjs/common';
@@ -150,32 +150,6 @@ export class AuthService {
         }
     }
 
-    async verifyLoginOTP(userId: string, otp: string, deviceInfo: any) {
-        const isValid = await this.otpHelper.verifyOtp(userId, otp);
-        if (!isValid) {
-            throw new BadRequestException('Invalid OTP');
-        }
-
-        // Add the device to user's devices list
-        await this.AuthModel.findByIdAndUpdate(userId, {
-            $push: {
-                Devices: {
-                    ...deviceInfo,
-                    lastUsedAt: new Date()
-                }
-            }
-        });
-
-        // Generate tokens and complete login
-        const RefreshToken = await this.jwtHelper.createRefreshToken(userId);
-        const AccessToken = await this.jwtHelper.createAccessToken(userId);
-
-        return {
-            RefreshToken,
-            AccessToken
-        };
-    }
-
     async verifyOtp(verifyOtpDto: VerifyOtpDto, res: Response, request: Request) {
         const session = await this.AuthModel.startSession();
         session.startTransaction();
@@ -195,24 +169,30 @@ export class AuthService {
                 throw new BadRequestException('Invalid OTP');
             }
 
-            // Add the device to user's devices list and update verification status
+            // Add the device to user's devices list
             const deviceInfo = getDeviceInfo(request);
+            const updates: any = {
+                $push: {
+                    Devices: {
+                        ...deviceInfo,
+                        lastUsedAt: new Date()
+                    }
+                },
+                lastLogin: new Date()
+            };
+
+            // Only update isVerified if user isn't already verified
+            if (!user.isVerified) {
+                updates.isVerified = true;
+            }
+
             const updatedUser = await this.AuthModel.findByIdAndUpdate(
                 userId,
-                {
-                    $push: {
-                        Devices: {
-                            ...deviceInfo,
-                            lastUsedAt: new Date()
-                        }
-                    },
-                    isVerified: true, // Set user as verified
-                    lastLogin: new Date()
-                },
-                { session, new: true } // Return the updated document
+                updates,
+                { session, new: true }
             );
 
-            // Generate tokens only after successful OTP verification
+            // Generate tokens
             const RefreshToken = await this.jwtHelper.createRefreshToken(userId);
             const AccessToken = await this.jwtHelper.createAccessToken(userId);
 
@@ -221,7 +201,7 @@ export class AuthService {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict',
-                maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days
+                maxAge: 10 * 24 * 60 * 60 * 1000
             });
 
             await session.commitTransaction();
@@ -246,5 +226,42 @@ export class AuthService {
         }
     }
 
+
+    async sendResetPasswordEmail(email: string) {
+        try {
+            const user = await this.AuthModel.findOne({ Email: email });
+            if (!user) {
+                throw new BadRequestException('User not found');
+            }
+            const resetPasswordToken = await this.jwtHelper.createResetPasswordToken(user.id);
+            await this.mailHelper.sendResetPasswordEmail(email, resetPasswordToken);
+            return { message: 'Reset password email sent', token: resetPasswordToken };
+        } catch (error) {
+            throw error;
+        }
+    }
+
+
+    async resetPassword(token: string, password: string) {
+        try {
+            const user = await this.jwtHelper.verifyToken(token);
+            // this.logger.debug(user);
+            const hashedPassword = HashPassword(password);
+            // this.logger.debug(password);
+            const updatedUser = await this.AuthModel.findByIdAndUpdate(user, { Password: hashedPassword });
+            if (!updatedUser) {
+                throw new BadRequestException('User not found');
+            }
+            return { message: 'Password reset successful' };
+        } catch (error) {
+            throw error;
+        }
+    }
+
+
+    async logout(res: Response) {
+        res.clearCookie('refreshToken');
+        return { message: 'Logged out successfully' };
+    }
 }
 

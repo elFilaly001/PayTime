@@ -84,4 +84,36 @@ export class MailHelper {
         }
 
     } 
+
+
+    async sendResetPasswordEmail(email: string , token: string) {
+        try {
+            const verificationLink = `${this.configService.get<string>('APP_URL')}/reset-password?token=${token}`;
+            
+            const fromName = this.configService.get<string>('MAIL_FROM_NAME');
+            const fromAddress = this.configService.get<string>('MAIL_FROM_ADDRESS');
+
+            const mailOptions = {
+                from: `${fromName} <${this.configService.get<string>('SMTP_USER')}>`,
+                to: email,
+                subject: "Verify Your Email Address",
+                html: `
+                    <h1>Reset Your Password</h1>
+                    <p>Please click the link below to reset your password:</p>
+                    <a href="${verificationLink}">Reset Password</a>
+                    <p>If you didn't request a password reset, you can ignore this email.</p>
+                    <p>This link will expire in 24 hours.</p>
+                `
+            };
+
+            const info = await this.transporter.sendMail(mailOptions);
+
+            this.logger.log(`Verification email sent to ${email}`);
+            return true;
+        } catch (error) {
+            this.logger.error(`Failed to send verification email to ${email}: ${error.message}`);
+            return false;
+        }
+
+    }
 }
