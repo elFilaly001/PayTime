@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dtos/Auth.dto';
 import { Exist } from '../Helpers/Exist.helper';
@@ -66,12 +66,12 @@ export class AuthService {
         try {
             // Check if user is banned
             if (user.isBanned) {
-                throw new BadRequestException('This account has been banned. Please contact support for more information.');
+                throw new UnauthorizedException('This account has been banned. Please contact support for more information.');
             }
 
             // Check if user is deleted
             if (user.isDeleted) {
-                throw new BadRequestException('This account has been deleted.');
+                throw new UnauthorizedException('This account has been deleted.');
             }
 
             // Check password validity
@@ -142,7 +142,13 @@ export class AuthService {
     async RefreshToken(req: Request) {
         try {
             const RefreshToken = getCookie(req);
+            if (!RefreshToken) {
+                throw new NotFoundException('Refresh token not found');
+            }
             const user = await this.jwtHelper.verifyToken(RefreshToken[1]);
+            if (!user) {
+                throw new UnauthorizedException('Invalid or expired refresh token');
+            }
             const AccessToken = await this.jwtHelper.createAccessToken(user);
             return { Access: AccessToken };
         } catch (error) {
@@ -160,13 +166,13 @@ export class AuthService {
             // Verify user exists
             const user = await this.AuthModel.findById(userId);
             if (!user) {
-                throw new BadRequestException('User not found');
+                throw new NotFoundException('User not found');
             }
 
             // Verify OTP
             const isValid = await this.redisService.verifyOtp(userId, otp);
             if (!isValid) {
-                throw new BadRequestException('Invalid OTP');
+                throw new UnauthorizedException('Invalid OTP');
             }
 
             // Add the device to user's devices list
@@ -231,7 +237,7 @@ export class AuthService {
         try {
             const user = await this.AuthModel.findOne({ Email: email });
             if (!user) {
-                throw new BadRequestException('User not found');
+                throw new NotFoundException('User not found');
             }
             const resetPasswordToken = await this.jwtHelper.createResetPasswordToken(user.id);
             await this.mailHelper.sendResetPasswordEmail(email, resetPasswordToken);
@@ -245,12 +251,10 @@ export class AuthService {
     async resetPassword(token: string, password: string) {
         try {
             const user = await this.jwtHelper.verifyToken(token);
-            // this.logger.debug(user);
             const hashedPassword = HashPassword(password);
-            // this.logger.debug(password);
             const updatedUser = await this.AuthModel.findByIdAndUpdate(user, { Password: hashedPassword });
             if (!updatedUser) {
-                throw new BadRequestException('User not found');
+                throw new NotFoundException('User not found');
             }
             return { message: 'Password reset successful' };
         } catch (error) {

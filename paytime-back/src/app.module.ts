@@ -5,6 +5,9 @@ import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule ,ConfigService } from '@nestjs/config';
 import { RedisModule } from './redis/redis.module';
+import { AdminsModule } from './admins/admins.module';
+import { ModeratorsModule } from './moderators/moderators.module';
+import { TickestModule } from './tickest/tickest.module';
 
 @Module({
   imports: [
@@ -20,7 +23,7 @@ import { RedisModule } from './redis/redis.module';
       },
       inject: [ConfigService],
     }),
-    AuthModule , AuthModule, RedisModule],
+    AuthModule , AuthModule, RedisModule, AdminsModule, ModeratorsModule, TickestModule],
   controllers: [AppController],
   providers: [AppService],
 })

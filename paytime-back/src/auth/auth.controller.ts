@@ -56,4 +56,9 @@ export class AuthController {
     return this.authService.resetPassword(token, password);
   }
 
+
+  @Get("logout")
+  async logout(@Res({ passthrough: true }) res: Response) {
+    return this.authService.logout(res);
+  }
 }
