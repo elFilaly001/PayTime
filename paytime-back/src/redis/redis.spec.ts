@@ -1,18 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Redis } from './redis.provider';
+import { RedisService } from './redis.service';
+
 
 describe('Redis', () => {
-  let provider: Redis;
+  let service: RedisService;
+
+  const mockRedisClient = {
+    set: jest.fn(),
+    get: jest.fn(),
+    del: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [Redis],
+      providers: [
+        RedisService,
+        {
+          provide: "REDIS_CLIENT",
+          useValue: mockRedisClient,
+        },
+      ],
     }).compile();
 
-    provider = module.get<Redis>(Redis);
+    service = module.get<RedisService>(RedisService);
   });
 
   it('should be defined', () => {
-    expect(provider).toBeDefined();
+    expect(service).toBeDefined();
   });
 });

@@ -1,17 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dtos/Auth.dto';
-import { Exist } from 'src/Helpers/Exist.helper';
-import { JWTHelperService } from 'src/Helpers/JWT.helpers';
-import { MailHelper } from 'src/Helpers/Mail.helper';
+import { Exist } from '../Helpers/Exist.helper';
+import { JWTHelperService } from '../Helpers/JWT.helpers';
+import { MailHelper } from '../Helpers/Mail.helper';
 import { ConfigService } from '@nestjs/config';
-import { VerifyPassword } from 'src/Helpers/Auth.helper';
-import { getCookie, setCookie } from 'src/Helpers/Cookies.helper';
+import { VerifyPassword } from '../Helpers/Auth.helper';
+import { getCookie, setCookie } from '../Helpers/Cookies.helper';
 import { Response, Request, request } from 'express';
 import { Logger } from '@nestjs/common';
-import { OTPHelper } from 'src/Helpers/OTP.helper';
-import { RedisService } from 'src/redis/redis.service';
-import { getDeviceInfo, isDeviceRecognized } from 'src/Helpers/Device.helper';
+import { OTPHelper } from '../Helpers/OTP.helper';
+import { RedisService } from '../redis/redis.service';
+import { getDeviceInfo, isDeviceRecognized } from '../Helpers/Device.helper';
+import { Redis } from 'ioredis';
 
 
 @Injectable()
@@ -29,7 +30,7 @@ export class AuthService {
 
     ) {
 
-        this.mailHelper = new MailHelper(this.configService);
+        // this.mailHelper = new MailHelper(this.configService);
 
     }
 
