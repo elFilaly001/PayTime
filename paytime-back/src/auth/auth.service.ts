@@ -232,7 +232,7 @@ export class AuthService {
                     Username: updatedUser.Username,
                     Email: updatedUser.Email,
                     Role: updatedUser.Role,
-                    isVerified: updatedUser.isVerified, // This will now be true
+                    isVerified: updatedUser.isVerified,
                     Friend_Code: updatedUser.Friend_Code,
                     Friend_list: updatedUser.Friend_list,
                     Friend_requests: updatedUser.Friend_requests
