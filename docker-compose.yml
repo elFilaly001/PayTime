@@ -44,6 +44,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
     volumes:
       - ./paytime-back:/app:delegated
       - /app/node_modules

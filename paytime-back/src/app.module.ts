@@ -8,6 +8,9 @@ import { RedisModule } from './redis/redis.module';
 import { AdminsModule } from './admins/admins.module';
 import { ModeratorsModule } from './moderators/moderators.module';
 import { TickestModule } from './tickest/tickest.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { PaymentModule } from './payment/payment.module';
+import { StripeModule } from './stripe/stripe.module';
 
 @Module({
   imports: [
@@ -23,7 +26,9 @@ import { TickestModule } from './tickest/tickest.module';
       },
       inject: [ConfigService],
     }),
-    AuthModule , AuthModule, RedisModule, AdminsModule, ModeratorsModule, TickestModule],
+    AuthModule , AuthModule, RedisModule, AdminsModule, ModeratorsModule, TickestModule, TransactionModule, PaymentModule, 
+    StripeModule.forRootAsync()
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
