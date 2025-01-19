@@ -1,4 +1,5 @@
 export class CreatePaymentDto {
+    userId: string;
     paymentMethodId: string;
     customerId: string;
   }

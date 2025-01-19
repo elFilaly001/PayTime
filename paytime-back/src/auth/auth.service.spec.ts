@@ -131,7 +131,7 @@ describe('AuthService', () => {
       });
       mockOtpHelper.generateOtp.mockResolvedValue('123456');
 
-      const result = await service.Register(registerDto, mockRequest);
+      const result = await service.Register(registerDto);
 
       expect(result).toEqual({
         User: {
@@ -158,7 +158,7 @@ describe('AuthService', () => {
       };
       mockAuthModel.findOne.mockResolvedValue({ id: '123' });
 
-      await expect(service.Register(registerDto, mockRequest))
+      await expect(service.Register(registerDto))
         .rejects.toThrow('already exists: Username or/and Email');
     });
   });

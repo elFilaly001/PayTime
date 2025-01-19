@@ -7,23 +7,29 @@ import { KeyPair } from './types/KeyPair.type';
 @Injectable()
 export class JWTHelperService {
     private readonly logger = new Logger(JWTHelperService.name);
-    private currentKeyPair: KeyPair | null = null;
+    private currentAccessKey: KeyPair | null = null;
+    private currentRefreshKey: KeyPair | null = null;
 
     constructor(
         private configService: ConfigService,
         private keyManager: KeyManagerService
     ) {}
 
-    private async getKey(): Promise<KeyPair> {
-        if (!this.currentKeyPair) {
-            this.currentKeyPair = await this.keyManager.getCurrentKey();
+    private async getAccessKey(): Promise<KeyPair> {
+        if (!this.currentAccessKey) {
+            this.currentAccessKey = await this.keyManager.getCurrentAccessKey();
         }
-        return this.currentKeyPair;
+        return this.currentAccessKey;
     }
 
-    private async createToken(userId: string, expiresIn: string): Promise<string> {
-        const keyPair = await this.getKey();
-        
+    private async getRefreshKey(): Promise<KeyPair> {
+        if (!this.currentRefreshKey) {
+            this.currentRefreshKey = await this.keyManager.getCurrentRefreshKey();
+        }
+        return this.currentRefreshKey;
+    }
+
+    private async createToken(userId: string, expiresIn: string, keyPair: KeyPair): Promise<string> {
         if (!keyPair || !keyPair.key) {
             throw new UnauthorizedException('Invalid key configuration');
         }
@@ -49,19 +55,21 @@ export class JWTHelperService {
     }
 
     async createAccessToken(userId: string): Promise<string> {
-        return this.createToken(userId, this.configService.get('JWT_ACCESS_TIME'));
+        const keyPair = await this.getAccessKey();
+        return this.createToken(userId, this.configService.get('JWT_ACCESS_TIME'), keyPair);
     }
 
     async createRefreshToken(userId: string): Promise<string> {
-        return this.createToken(userId, this.configService.get('JWT_REFRESH_TIME'));
+        const keyPair = await this.getRefreshKey();
+        return this.createToken(userId, this.configService.get('JWT_REFRESH_TIME'), keyPair);
     }
 
     async createResetPasswordToken(userId: string): Promise<string> {
-        return this.createToken(userId, this.configService.get('JWT_RESET_PASSWORD_TIME'));
+        return this.createToken(userId, this.configService.get('JWT_RESET_PASSWORD_TIME'), await this.getAccessKey());
     }
 
     async createEmailVerificationToken(userId: string): Promise<string> {
-        return this.createToken(userId, this.configService.get('JWT_EMAIL_VERIFICATION_TIME'));
+        return this.createToken(userId, this.configService.get('JWT_EMAIL_VERIFICATION_TIME'), await this.getAccessKey());
     }
 
     async verifyToken(token: string): Promise<any> {

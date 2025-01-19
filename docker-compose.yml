@@ -7,15 +7,16 @@ services:
       context: ./paytime-front
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - "172.27.160.1:5173:5173"
     networks:
       - frontend-network
     volumes:
-      - ./paytime-front:/app:delegated
+      - ./paytime-front:/app
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
+      - VITE_API_URL=http://localhost:5173
     depends_on:
       - api
 
@@ -25,7 +26,7 @@ services:
       context: ./paytime-back
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "172.27.160.1:3000:3000"
     environment:
       - MONGO_URI=${MONGO_URI}
       - SMTP_HOST=${SMTP_HOST}
@@ -58,7 +59,7 @@ services:
     container_name: paytime-redis
     image: redis:latest
     ports:
-      - "6379:6379" 
+      - "172.27.160.1:6379:6379" 
     networks:
       - backend-network
     command: redis-server --save 60 1 --loglevel warning

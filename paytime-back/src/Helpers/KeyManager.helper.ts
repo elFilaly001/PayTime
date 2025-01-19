@@ -12,6 +12,7 @@ interface KeyPair {
     active: boolean;
     createdAt: Date;
     expiresAt: Date;
+    type: 'access' | 'refresh';  // Add key type
 }
 
 interface KeyStore {
@@ -23,9 +24,10 @@ interface KeyStore {
 export class KeyManagerService {
 
     private logger = new Logger(KeyManagerService.name);
-    private readonly KEY_EXPIRATION_DAYS = 30;  // How long a key remains active
-    private readonly KEY_RETENTION_DAYS = 40;   // How long to keep expired keys
-    private readonly KEY_CHECK_INTERVAL = 12;
+    private readonly KEY_EXPIRATION_DAYS = {
+        access: 7,    // Access tokens rotate more frequently
+        refresh: 30   // Refresh tokens need longer validity
+    };
 
     private keyStore: KeyStore = {
         keys: [],
@@ -37,18 +39,25 @@ export class KeyManagerService {
     }
 
     // Public methods needed for JWT.helpers.ts
-    async getCurrentKey(): Promise<KeyPair> {
-        const keys = await this.loadKeyStore();
-        const activeKeys = this.getActiveKeys();
+    async getCurrentAccessKey(): Promise<KeyPair> {
+        const activeKeys = this.getActiveKeys().filter(k => k.type === 'access');
+        
+        if (activeKeys.length === 0) {
+            this.logger.warn('No active access key found - generating new key');
+            return this.addNewKey('access');
+        }
 
-        if(keys.length === 0) {
-            this.logger.warn('No keys found - generating new key');
-            const newKey = await this.addNewKey();
-            return newKey;
-        }else if (activeKeys.length === 0) {
-            this.logger.warn('No active keys found - generating new key');
-            const newKey = await this.addNewKey();
-            return newKey;
+        return activeKeys.reduce((latest, current) => 
+            new Date(latest.createdAt) > new Date(current.createdAt) ? latest : current
+        );
+    }
+
+    async getCurrentRefreshKey(): Promise<KeyPair> {
+        const activeKeys = this.getActiveKeys().filter(k => k.type === 'refresh');
+        
+        if (activeKeys.length === 0) {
+            this.logger.warn('No active refresh key found - generating new key');
+            return this.addNewKey('refresh');
         }
 
         return activeKeys.reduce((latest, current) => 
@@ -57,29 +66,30 @@ export class KeyManagerService {
     }
 
     async findKeyById(kid: string): Promise<KeyPair | undefined> {
-        await this.getCurrentKey();
+        await this.getCurrentAccessKey();
+        await this.getCurrentRefreshKey();
         return this.keyStore.keys.find(key => key.id === kid && key.active);
     }
 
-    private GenerateNewKey(): KeyPair {
+    private GenerateNewKey(type: 'access' | 'refresh'): KeyPair {
         const id = crypto.randomBytes(8).toString('hex');
         const key = crypto.randomBytes(32).toString('hex');
         const now = new Date();
         const expiry = new Date(now);
-        expiry.setDate(expiry.getDate() + 30); 
+        expiry.setDate(expiry.getDate() + this.KEY_EXPIRATION_DAYS[type]); 
 
-        // Define a list of algorithms to rotate between
+        // Randomly select a secure algorithm
         const algorithms: Algorithm[] = ['HS256', 'HS384', 'HS512'];
-        // Randomly select an algorithm from the list
         const algorithm = algorithms[Math.floor(Math.random() * algorithms.length)];
 
         return {
             id,
             key,
-            algorithm, 
+            algorithm,
             active: true,
             createdAt: now,
-            expiresAt: expiry
+            expiresAt: expiry,
+            type
         };
     }
 
@@ -96,7 +106,8 @@ export class KeyManagerService {
             this.logger.log('Created new key store file');
             
             // Create initial key
-            await this.addNewKey();
+            await this.addNewKey('access');
+            await this.addNewKey('refresh');
             await this.updateKeyStore(this.keyStore);
         } catch (error) {
             this.logger.error(`Error creating key store file: ${error}`);
@@ -119,36 +130,32 @@ export class KeyManagerService {
         }
     }
 
-    private async rotateKeys(): Promise<KeyPair> {
+    private async rotateKeys(): Promise<void> {
         try {
-            await this.loadKeyStore();
             const now = new Date();
-            const activeKeys = this.getActiveKeys();
             
-            // Check if current active key is expired
-            const currentKey = activeKeys[0];
-            const isKeyExpired = currentKey ? new Date(currentKey.expiresAt) <= now : true;
-            
-            this.logger.debug('Key rotation check:', {
-                now: now.toISOString(),
-                currentKeyExpiry: currentKey?.expiresAt,
-                isKeyExpired,
+            // Check and rotate access keys
+            const activeAccessKeys = this.getActiveKeys().filter(k => k.type === 'access');
+            if (activeAccessKeys.length === 0 || new Date(activeAccessKeys[0].expiresAt) <= now) {
+                this.logger.log('Rotating access keys');
+                await this.addNewKey('access');
+            }
+
+            // Check and rotate refresh keys
+            const activeRefreshKeys = this.getActiveKeys().filter(k => k.type === 'refresh');
+            if (activeRefreshKeys.length === 0 || new Date(activeRefreshKeys[0].expiresAt) <= now) {
+                this.logger.log('Rotating refresh keys');
+                await this.addNewKey('refresh');
+            }
+
+            // Deactivate expired keys
+            this.keyStore.keys.forEach((key) => {
+                if (new Date(key.expiresAt) <= now) {
+                    key.active = false;
+                }
             });
 
-            // Only rotate if current key is expired
-            if (isKeyExpired) {
-                this.logger.log('Rotating keys - deactivating old keys');
-                this.keyStore.keys.forEach((key) => {
-                    key.active = false;
-                });
-
-                const newKey = await this.addNewKey();
-                this.keyStore.lastRotation = now.toISOString();
-                await this.updateKeyStore(this.keyStore);
-                return newKey;
-            }
-            
-            return activeKeys[0];
+            await this.updateKeyStore(this.keyStore);
         } catch (error) {
             this.logger.error(`Error rotating keys: ${error}`);
             throw error;
@@ -163,10 +170,10 @@ export class KeyManagerService {
         return this.keyStore.keys.filter(key => key.active);
     }
 
-    private async addNewKey(): Promise<KeyPair> {
-        const newKey = this.GenerateNewKey();
+    private async addNewKey(type: 'access' | 'refresh'): Promise<KeyPair> {
+        const newKey = this.GenerateNewKey(type);
         this.keyStore.keys.push(newKey);
-        await this.updateKeyStore(this.keyStore); // Save changes to file
+        await this.updateKeyStore(this.keyStore);
         return newKey;
     }
 

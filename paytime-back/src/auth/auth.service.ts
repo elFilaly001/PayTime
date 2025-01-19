@@ -26,22 +26,17 @@ export class AuthService {
         private mailHelper: MailHelper,
         private otpHelper: OTPHelper,
         private redisService: RedisService
+    ) {}
 
-
-    ) {
-
-        // this.mailHelper = new MailHelper(this.configService);
-
-    }
-
-    async Register(Data: RegisterDto, request: Request) {
-
-        await Exist(this.AuthModel, { Username: Data.Username, Email: Data.Email }, false);
+    async Register(Data: RegisterDto) {
+        this.logger.debug(Data);
+        
+        // Check username and email separately
+        await Exist(this.AuthModel, { Username: Data.Username }, false);
+        await Exist(this.AuthModel, { Email: Data.Email }, false);
 
         try {
-
             const user = await this.AuthModel.create(Data);
-
             return {
                 User: {
                     Username: user.Username,
@@ -51,9 +46,9 @@ export class AuthService {
                     Friend_Code: user.Friend_Code,
                     Friend_list: user.Friend_list,
                     Friend_requests: user.Friend_requests
-                }
+                },
+                message: "User created successfully"
             };
-
         } catch (error) {
             throw error;
         }
@@ -118,7 +113,7 @@ export class AuthService {
                         Friend_list: user.Friend_list,
                         Friend_requests: user.Friend_requests
                     },
-                    Access: AccessToken
+                    Access: AccessToken,
                 };
             }
 
@@ -223,7 +218,7 @@ export class AuthService {
                     Friend_list: updatedUser.Friend_list,
                     Friend_requests: updatedUser.Friend_requests
                 },
-                Access: AccessToken
+                Access: AccessToken,
             };
         } catch (error) {
             await session.abortTransaction();

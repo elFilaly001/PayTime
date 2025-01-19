@@ -15,8 +15,8 @@ export class AuthController {
 
   @UseInterceptors(AuthInterceptor) 
   @Post("register")
-  Rgister(@Body() Data : RegisterDto, @Req() req: Request){ 
-    return this.authService.Register(Data, req);
+  Rgister(@Body() Data : RegisterDto){ 
+    return this.authService.Register(Data);
   }
 
 
