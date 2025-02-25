@@ -12,7 +12,9 @@ import { Logger } from '@nestjs/common';
 import { OTPHelper } from '../Helpers/OTP.helper';
 import { RedisService } from '../redis/redis.service';
 import { getDeviceInfo, isDeviceRecognized } from '../Helpers/Device.helper';
+import { StripeService } from 'src/stripe/stripe.service';
 import { Redis } from 'ioredis';
+import Stripe from 'stripe';
 
 
 @Injectable()
@@ -25,22 +27,39 @@ export class AuthService {
         private configService: ConfigService,
         private mailHelper: MailHelper,
         private otpHelper: OTPHelper,
-        private redisService: RedisService
+        private redisService: RedisService,
+        private stripeService: StripeService
     ) {}
 
     async Register(Data: RegisterDto) {
-        this.logger.debug(Data);
-        
-        // Check username and email separately
+        // Check username and email 
         await Exist(this.AuthModel, { Username: Data.Username }, false);
         await Exist(this.AuthModel, { Email: Data.Email }, false);
 
+        //create a trasaction session 
+        const transactionSession = await this.AuthModel.startSession()
+        transactionSession.startTransaction()
+
         try {
-            const user = await this.AuthModel.create(Data);
+
+            //create a stripe costumer
+            const stripeCostumer = await this.stripeService.createCustomer(Data.Email , Data.Username);
+
+            const newData = {...Data , StripeCostumer: stripeCostumer.id}
+
+            this.logger.debug(newData)
+
+            const user = await this.AuthModel.create(newData);
+
+            this.logger.debug(user)
+
+            await transactionSession.commitTransaction();
+            transactionSession.endSession();
             return {
                 User: {
                     Username: user.Username,
                     Email: user.Email,
+                    Custumer : stripeCostumer.id,
                     Role: user.Role,
                     isVerified: user.isVerified,
                     Friend_Code: user.Friend_Code,
@@ -50,6 +69,8 @@ export class AuthService {
                 message: "User created successfully"
             };
         } catch (error) {
+            await transactionSession.abortTransaction()
+            transactionSession.endSession();
             throw error;
         }
     }
@@ -63,17 +84,17 @@ export class AuthService {
             if (user.isBanned) {
                 throw new UnauthorizedException('This account has been banned. Please contact support for more information.');
             }
-
+            
             // Check if user is deleted
             if (user.isDeleted) {
                 throw new UnauthorizedException('This account has been deleted.');
             }
-
+            
             // Check password validity
             if (!VerifyPassword(Data.Password, user.Password)) {
                 throw new BadRequestException('Invalid Password');
             }
-
+            
             const deviceInfo = getDeviceInfo(request);
             
             // Always require OTP for unverified users
@@ -111,7 +132,8 @@ export class AuthService {
                         isVerified: user.isVerified,
                         Friend_Code: user.Friend_Code,
                         Friend_list: user.Friend_list,
-                        Friend_requests: user.Friend_requests
+                        Friend_requests: user.Friend_requests,
+                        StripeCostumer: user.StripeCostumer
                     },
                     Access: AccessToken,
                 };

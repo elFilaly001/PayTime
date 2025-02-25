@@ -1,28 +1,39 @@
-import { Controller, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Delete, Body, Param, UseGuards, Get, Put } from '@nestjs/common';
 import { PaymentService } from './payment.service';
-import { ProcessLoanRepaymentDto, RecordCashPaymentDto } from './dto/create-payment.dto';
+import { ProcessLoanRepaymentDto, RecordCashPaymentDto , CreatePaymentIdDto } from './dto/create-payment.dto';
+import { get } from 'http';
 
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post('card')
-  async addCreditCard(
-    @Body() body: { userId: string; customerId: string; paymentMethodId: string }
+  @Post('addCard')
+  async addCard(
+    @Body() card: CreatePaymentIdDto
   ) {
-    return this.paymentService.addCreditCard(
-      body.userId,
-      body.customerId,
-      body.paymentMethodId
-    );
+    return this.paymentService.addCard(card);
   }
 
-  @Delete('card/:userId/:paymentId')
-  async deleteCreditCard(
-    @Param('userId') userId: string,
-    @Param('paymentId') paymentId: string
+
+  @Get('cards/:costumerId')
+  async GetUserCards(@Param('costumerId') costumerId: string) {
+    return this.paymentService.GetUserCards(costumerId);
+  }
+
+
+  @Put('default/:customerId/:paymentId')
+  async setDefaultCard(
+    @Param('customerId') customerId: string,
+    @Param('paymentId') Id: string
   ) {
-    return this.paymentService.deleteCreditCard(userId, paymentId);
+    return this.paymentService.setDefaultCard(customerId, Id);
+  }
+
+  @Delete(':Id')
+  async deleteCreditCard(
+    @Param('Id') Id: string,
+  ) {
+    return this.paymentService.deleteCreditCard(Id);
   }
 
   @Post('loan-repayment')

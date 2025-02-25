@@ -31,11 +31,11 @@ export class AuthController {
     return this.authService.RefreshToken(req);
   }
 
-  // @Get('device-info')
-  // getDeviceInfo(@Req() request: Request) {
-  //   const deviceInfo = getDeviceInfo(request);
-  //   return deviceInfo;
-  // }
+  @Get('device-info')
+  getDeviceInfo(@Req() request: Request) {
+    const deviceInfo = getDeviceInfo(request);
+    return deviceInfo;
+  }
 
   @Post("verify-otp")
   async verifyOtp(

@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { StripeService } from '../stripe/stripe.service';
 import { Payments } from './schema/payment.schema';
 import { Transaction } from '../transaction/schema/transaction.schema';
+import { CreatePaymentIdDto } from './dto/create-payment.dto';
 
 @Injectable()
 export class PaymentService {
@@ -98,38 +99,24 @@ export class PaymentService {
     }
   }
 
-  async addCreditCard(
-    userId: string,
-    customerId: string,
-    paymentMethodId: string
-  ) {
+  async addCard(Payment: CreatePaymentIdDto) {
     try {
-      // Attach payment method to customer in Stripe
-      const paymentMethod = await this.stripeService.attachPaymentMethod(
-        customerId,
-        paymentMethodId
-      );
-
-      // Get card details from the payment method
-      const card = paymentMethod.card;
-
       // Create payment method record in database
       const payment = await this.paymentModel.create({
-        userId,
-        stripeCustomerId: customerId,
-        stripePaymentMethodId: paymentMethodId,
-        last4: card.last4,
-        cardBrand: card.brand,
-        expiryMonth: card.exp_month,
-        expiryYear: card.exp_year,
+        stripeCustomerId: Payment.costumerId,
+        stripePaymentMethodId: Payment.paymentMethodId,
+        holderName: Payment.holderName,
+        last4: Payment.last4,
+        cardBrand: Payment.brand,
+        expiryMonth: Payment.exp_month,
+        expiryYear: Payment.exp_year,
         isDefault: false,
-        isActive: true
       });
 
       // If this is the first card, make it default
-      const cardCount = await this.paymentModel.countDocuments({ userId });
+      const cardCount = await this.paymentModel.countDocuments({ stripeCustomerId: Payment.costumerId });
       if (cardCount === 1) {
-        await this.setDefaultCard(userId, payment._id.toString());
+        await this.setDefaultCard(Payment.costumerId, payment._id.toString());
       }
 
       return payment;
@@ -138,54 +125,58 @@ export class PaymentService {
     }
   }
 
-  async deleteCreditCard(userId: string, paymentId: string) {
+  async deleteCreditCard(Id: string) {
     try {
-      const payment = await this.paymentModel.findOne({ 
-        _id: paymentId,
-        userId 
-      });
+
+      const payment = await this.paymentModel.findById(Id);
 
       if (!payment) {
-        throw new NotFoundException('Payment method not found');
+        throw new NotFoundException(`Payment method with ID ${Id} not found`);
+      }if (payment.isDefault) {
+        throw new BadRequestException('Cannot delete default payment method');
       }
-
-      // Detach payment method from Stripe
-      await this.stripeService.detachPaymentMethod(payment.stripePaymentMethodId);
-
-      // If this was the default card, set another card as default
-      if (payment.isDefault) {
-        const anotherCard = await this.paymentModel.findOne({ 
-          userId,
-          _id: { $ne: paymentId },
-          isActive: true
-        });
-        if (anotherCard) {
-          await this.setDefaultCard(userId, anotherCard._id.toString());
-        }
-      }
-
-      // Soft delete the payment method
-      await this.paymentModel.findByIdAndUpdate(paymentId, {
-        isActive: false
-      });
-
+      await this.paymentModel.findByIdAndDelete(Id);
       return { message: 'Payment method deleted successfully' };
+      
+      
     } catch (error) {
       throw new BadRequestException(error.message);
     }
   }
 
-  private async setDefaultCard(userId: string, paymentId: string) {
-    // Remove default flag from all other cards
-    await this.paymentModel.updateMany(
-      { userId },
-      { isDefault: false }
-    );
 
-    // Set the new default card
-    await this.paymentModel.findByIdAndUpdate(paymentId, {
-      isDefault: true
-    });
+  async GetUserCards(costumerId:string) {
+    try {
+      const cards = await this.paymentModel.find({ stripeCustomerId: costumerId });
+      return cards;
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  async setDefaultCard(customerId: string, Id: string) {
+    try {
+      // First, set all cards for this customer to non-default
+      await this.paymentModel.updateMany(
+        { stripeCustomerId: customerId },
+        { isDefault: false }
+      );
+      
+      // Then set the specified card as default
+      const updatedCard = await this.paymentModel.findByIdAndUpdate(
+        Id,
+        { isDefault: true },
+        { new: true } 
+      );
+      
+      if (!updatedCard) {
+        throw new NotFoundException(`Payment method with ID ${Id} not found`);
+      }
+      
+      return updatedCard;
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   async setupCardForUser(

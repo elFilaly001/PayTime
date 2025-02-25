@@ -6,9 +6,13 @@ import InputEmail from "../components/inputs/InputEmail.jsx";
 import InputPassword from "../components/inputs/InputPassword.jsx";
 import ButtonSubmit from "../components/buttons/ButtonSubmit.jsx";
 import { useNavigate } from "react-router-dom";
+import { useDispatch , useSelector } from "react-redux";
+import { setUser } from "../store/Slices/UserSlice.ts";
+
 
 export default function Login() {
 
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,11 +45,13 @@ export default function Login() {
     if (response.data.requiresOTP) {
       navigate("/otp", { state: { userId: response.data.userId } });
       return;
+    }else{
+      dispatch(setUser(response.data.User));
+      navigate("/");
     }
   } catch (error) {
     console.log(error);
   }
-    console.log(data);
   };
 
 

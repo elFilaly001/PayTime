@@ -1,12 +1,13 @@
 import InputOTP from "../components/inputs/InputOTP";
-import { useRef } from "react";
+import { useRef  } from "react";
 import ButtonSubmit from "../components/buttons/ButtonSubmit";
 import { Toaster, toast } from "react-hot-toast";
-import { useLocation } from "react-router-dom";
+import { useLocation , useNavigate} from "react-router-dom";
 import {axiosInstance} from "../service/axiosInstence";
 
 export default function OTP() {
     const location = useLocation();
+    const navigate = useNavigate();
     const inputRefs = [
         useRef(null),
         useRef(null),

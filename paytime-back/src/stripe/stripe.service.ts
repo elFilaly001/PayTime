@@ -21,11 +21,35 @@ export class StripeService {
   }
 
   async createCustomer(email: string, name: string): Promise<Stripe.Customer> {
-    return this.stripe.customers.create({
+    return await this.stripe.customers.create({
       email,
       name,
     });
   }
+  async createPaymentToken(
+    number: string,
+    exp_month: string,
+    exp_year: string,
+    cvc: string
+  ) : Promise<string> {
+    try {
+      const token = await this.stripe.tokens.create({
+        card: {
+          number,
+          exp_month,
+          exp_year,
+          cvc,
+        },
+      });
+      
+      return token.id; // This will return something like 'tok_...'
+    } catch (error) {
+      throw new Error(`Failed to create token: ${error.message}`);
+    }
+  }
+
+  
+ 
 
   async attachPaymentMethod(customerId: string, paymentMethodId: string): Promise<Stripe.PaymentMethod> {
     return this.stripe.paymentMethods.attach(paymentMethodId, {

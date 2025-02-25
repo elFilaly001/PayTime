@@ -23,7 +23,7 @@ export default function InputEmail({ placeholder, value, name, onChange = () => 
     return (
         <>
             <input 
-                className="outline-none border-2 w-1/2 rounded-md p-1 pl-3 text-md border-gray-500" 
+                className="outline-none border-2 w-1/2 rounded-md p-1 pl-3 text-md border-indigo-600" 
                 type="email" 
                 placeholder={placeholder} 
                 value={value} 

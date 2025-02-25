@@ -8,11 +8,13 @@ import { KeyManagerService } from '../Helpers/KeyManager.helper';
 import { RedisModule } from 'src/redis/redis.module';
 import { MailHelper } from 'src/Helpers/Mail.helper';
 import { OTPHelper } from 'src/Helpers/OTP.helper';
+import { StripeModule } from 'src/stripe/stripe.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: 'Auth', schema: AuthSchema }]),
-    RedisModule
+    RedisModule,
+    StripeModule
   ],
   controllers: [AuthController],
   providers: [

@@ -17,6 +17,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - VITE_API_URL=http://localhost:5173
+      - VITE_STRIPE_PUBLISHABLE_KEY= ${VITE_STRIPE_PUBLISHABLE_KEY}
     depends_on:
       - api
 

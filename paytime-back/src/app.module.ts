@@ -5,8 +5,6 @@ import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule ,ConfigService } from '@nestjs/config';
 import { RedisModule } from './redis/redis.module';
-import { AdminsModule } from './admins/admins.module';
-import { ModeratorsModule } from './moderators/moderators.module';
 import { TickestModule } from './tickest/tickest.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PaymentModule } from './payment/payment.module';
@@ -26,7 +24,7 @@ import { StripeModule } from './stripe/stripe.module';
       },
       inject: [ConfigService],
     }),
-    AuthModule , AuthModule, RedisModule, AdminsModule, ModeratorsModule, TickestModule, TransactionModule, PaymentModule, 
+    AuthModule , AuthModule, RedisModule, TickestModule, TransactionModule, PaymentModule, 
     StripeModule.forRootAsync()
   ],
   controllers: [AppController],

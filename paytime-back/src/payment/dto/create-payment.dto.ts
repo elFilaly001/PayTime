@@ -1,7 +1,11 @@
-export class CreatePaymentDto {
-    userId: string;
-    paymentMethodId: string;
-    customerId: string;
+  export class CreatePaymentIdDto{
+   costumerId : string
+   paymentMethodId: string
+   holderName : string
+   brand : string
+   last4 : string
+   exp_month : string
+   exp_year : string
   }
   
   export class ProcessPaymentDto {
