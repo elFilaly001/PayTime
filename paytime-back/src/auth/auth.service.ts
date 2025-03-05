@@ -126,6 +126,7 @@ export class AuthService {
                 return {
                     requiresOTP: false,
                     User: {
+                        id: user._id,
                         Username: user.Username,
                         Email: user.Email,
                         Role: user.Role,
@@ -232,6 +233,7 @@ export class AuthService {
 
             return {
                 User: {
+                    id: userId,
                     Username: updatedUser.Username,
                     Email: updatedUser.Email,
                     Role: updatedUser.Role,

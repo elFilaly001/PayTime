@@ -1,11 +1,27 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 
+export type AuthDocument = Auth & HydratedDocument<Auth>;
 
-export type AuthDocument = HydratedDocument<Auth>;
+// Create a separate schema for friend requests
+@Schema({ _id: false })
+export class FriendRequest {
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Auth' })
+  from: MongooseSchema.Types.ObjectId;
+
+  @Prop()
+  Username: string;
+
+  @Prop({ default: 'pending', enum: ['pending', 'accepted', 'rejected'] })
+  status: string;
+
+  @Prop({ default: Date.now })
+  createdAt: Date;
+}
+
+const FriendRequestSchema = SchemaFactory.createForClass(FriendRequest);
 
 @Schema()
-
 export class Auth {
   @Prop({ required: true, unique: true })
   Username: string;
@@ -22,11 +38,22 @@ export class Auth {
   @Prop({ required: true, unique: true })
   Friend_Code: string;
 
-  @Prop()
-  Friend_list: Array<string>;
+  @Prop({
+    type: [{
+      userId: { type: Types.ObjectId, ref: 'Auth' },
+      Username: { type: String },
+      addedAt: { type: Date, default: Date.now }
+    }],
+    default: []
+  })
+  Friend_list: {
+    userId: Types.ObjectId;
+    Username: string;
+    addedAt: Date;
+  }[];
 
-  @Prop()
-  Friend_requests: Array<string>;
+  @Prop({ type: [FriendRequestSchema], default: [] })
+  Friend_requests: FriendRequest[];
 
   @Prop({ required: true, default: "User" })
   Role: string;
@@ -69,7 +96,11 @@ export class Auth {
     lastUsedAt: Date;
   }>;
 
-}
+  @Prop({ default: null })
+  OTP?: string;
 
+  @Prop({ default: Date.now })
+  createdAt: Date;
+}
 
 export const AuthSchema = SchemaFactory.createForClass(Auth);

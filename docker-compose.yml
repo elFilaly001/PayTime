@@ -18,6 +18,7 @@ services:
       - WATCHPACK_POLLING=true
       - VITE_API_URL=http://localhost:5173
       - VITE_STRIPE_PUBLISHABLE_KEY= ${VITE_STRIPE_PUBLISHABLE_KEY}
+      - VITE_BACK_APP_URL=${VITE_BACK_APP_URL}
     depends_on:
       - api
 
@@ -47,6 +48,7 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      
     volumes:
       - ./paytime-back:/app:delegated
       - /app/node_modules

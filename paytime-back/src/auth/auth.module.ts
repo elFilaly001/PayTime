@@ -9,6 +9,7 @@ import { RedisModule } from 'src/redis/redis.module';
 import { MailHelper } from 'src/Helpers/Mail.helper';
 import { OTPHelper } from 'src/Helpers/OTP.helper';
 import { StripeModule } from 'src/stripe/stripe.module';
+import { AuthGuard } from './auth.guard';
 
 @Module({
   imports: [
@@ -23,8 +24,14 @@ import { StripeModule } from 'src/stripe/stripe.module';
     KeyManagerService,
     MailHelper,
     OTPHelper,
-    Logger
+    Logger,
+    AuthGuard
   ],
-  exports: [AuthService],
+  exports: [
+    AuthService,
+    AuthGuard,
+    JWTHelperService,
+    KeyManagerService
+  ],
 })
 export class AuthModule {}

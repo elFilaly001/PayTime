@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Algorithm } from 'jsonwebtoken';
 import * as fs from 'fs';
@@ -12,7 +12,7 @@ interface KeyPair {
     active: boolean;
     createdAt: Date;
     expiresAt: Date;
-    type: 'access' | 'refresh';  // Add key type
+    type: 'access' | 'refresh';
 }
 
 interface KeyStore {
@@ -21,66 +21,105 @@ interface KeyStore {
 }
 
 @Injectable()
-export class KeyManagerService {
-
+export class KeyManagerService implements OnModuleInit {
     private logger = new Logger(KeyManagerService.name);
     private readonly KEY_EXPIRATION_DAYS = {
-        access: 7,    // Access tokens rotate more frequently
-        refresh: 30   // Refresh tokens need longer validity
+        access: 7,    
+        refresh: 30  
     };
-
+    private readonly KEY_FILE_PATH: string;
+    
     private keyStore: KeyStore = {
         keys: [],
         lastRotation: new Date().toISOString()
     };
+    
+    private initialized = false;
 
     constructor(private configService: ConfigService) {
-        this.loadKeysFromFile();  
+        const keysDir = process.env.KEYS_DIR || process.cwd();
+        this.KEY_FILE_PATH = path.resolve(keysDir, 'keys.json');
     }
 
-    // Public methods needed for JWT.helpers.ts
+    async onModuleInit() {
+        await this.initialize();
+    }
+
+    private async initialize(): Promise<void> {
+        if (this.initialized) return;
+
+        try {
+            await this.ensureKeyFileExists();
+            await this.loadKeysFromFile();
+            
+            const accessKeys = this.getActiveKeys('access');
+            const refreshKeys = this.getActiveKeys('refresh');
+            
+            if (accessKeys.length === 0) {
+                await this.addNewKey('access');
+            }
+            
+            if (refreshKeys.length === 0) {
+                await this.addNewKey('refresh');
+            }
+            
+            await this.rotateKeys(false);
+            
+            this.initialized = true;
+        } catch (error) {
+            this.logger.error(`Error initializing key manager: ${error.message}`);
+            throw error;
+        }
+    }
+
     async getCurrentAccessKey(): Promise<KeyPair> {
-        const activeKeys = this.getActiveKeys().filter(k => k.type === 'access');
+        if (!this.initialized) await this.initialize();
+        
+        const activeKeys = this.getActiveKeys('access');
         
         if (activeKeys.length === 0) {
-            this.logger.warn('No active access key found - generating new key');
-            return this.addNewKey('access');
+            return await this.addNewKey('access');
         }
 
-        return activeKeys.reduce((latest, current) => 
-            new Date(latest.createdAt) > new Date(current.createdAt) ? latest : current
-        );
+        return activeKeys.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+        )[0];
     }
 
     async getCurrentRefreshKey(): Promise<KeyPair> {
-        const activeKeys = this.getActiveKeys().filter(k => k.type === 'refresh');
+        if (!this.initialized) await this.initialize();
+        
+        const activeKeys = this.getActiveKeys('refresh');
         
         if (activeKeys.length === 0) {
-            this.logger.warn('No active refresh key found - generating new key');
-            return this.addNewKey('refresh');
+            return await this.addNewKey('refresh');
         }
 
-        return activeKeys.reduce((latest, current) => 
-            new Date(latest.createdAt) > new Date(current.createdAt) ? latest : current
-        );
+        return activeKeys.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+        )[0];
     }
 
     async findKeyById(kid: string): Promise<KeyPair | undefined> {
-        await this.getCurrentAccessKey();
-        await this.getCurrentRefreshKey();
-        return this.keyStore.keys.find(key => key.id === kid && key.active);
+        if (!this.initialized) await this.initialize();
+        
+        const key = this.keyStore.keys.find(k => k.id === kid);
+        
+        if (!key) {
+            return undefined;
+        }
+        
+        return key;
     }
 
-    private GenerateNewKey(type: 'access' | 'refresh'): KeyPair {
+    private generateNewKey(type: 'access' | 'refresh'): KeyPair {
         const id = crypto.randomBytes(8).toString('hex');
         const key = crypto.randomBytes(32).toString('hex');
         const now = new Date();
         const expiry = new Date(now);
         expiry.setDate(expiry.getDate() + this.KEY_EXPIRATION_DAYS[type]); 
 
-        // Randomly select a secure algorithm
-        const algorithms: Algorithm[] = ['HS256', 'HS384', 'HS512'];
-        const algorithm = algorithms[Math.floor(Math.random() * algorithms.length)];
+        const algorithm: Algorithm = 'HS256';
 
         return {
             id,
@@ -93,163 +132,170 @@ export class KeyManagerService {
         };
     }
 
-    private async createFile(): Promise<void> {
-        const filePath = path.join(process.cwd(), 'keys.json');
-        const initialKeyStore = {
-            keys: [],
-            lastRotation: new Date().toISOString()
-        };
-        
+    private async ensureKeyFileExists(): Promise<void> {
         try {
-            await fs.promises.writeFile(filePath, JSON.stringify(initialKeyStore, null, 4));
-            this.keyStore = initialKeyStore;
-            this.logger.log('Created new key store file');
+            const dir = path.dirname(this.KEY_FILE_PATH);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
             
-            // Create initial key
-            await this.addNewKey('access');
-            await this.addNewKey('refresh');
-            await this.updateKeyStore(this.keyStore);
+            if (!fs.existsSync(this.KEY_FILE_PATH)) {
+                const initialKeyStore: KeyStore = {
+                    keys: [],
+                    lastRotation: new Date().toISOString()
+                };
+                
+                fs.writeFileSync(
+                    this.KEY_FILE_PATH, 
+                    JSON.stringify(initialKeyStore, null, 4),
+                    { encoding: 'utf8', mode: 0o600 }
+                );
+                
+                this.keyStore = { ...initialKeyStore };
+            }
         } catch (error) {
-            this.logger.error(`Error creating key store file: ${error}`);
+            this.logger.error(`Failed to ensure key file exists: ${error.message}`);
             throw error;
         }
     }
 
-    private checkFile(): boolean {
-        try {
-            const filePath = path.join(process.cwd(), 'keys.json');
-            this.logger.log(`Checking file: ${filePath}`);
-            const exists = fs.existsSync(filePath);
-            if (!exists) {
-                this.createFile();
-            }
-            return exists;
-        } catch (error) {
-            this.logger.error(`Error checking file: ${error}`);
-            
-        }
-    }
-
-    private async rotateKeys(): Promise<void> {
+    private async rotateKeys(forceRotation: boolean = false): Promise<void> {
         try {
             const now = new Date();
+            let keysUpdated = false;
             
-            // Check and rotate access keys
-            const activeAccessKeys = this.getActiveKeys().filter(k => k.type === 'access');
-            if (activeAccessKeys.length === 0 || new Date(activeAccessKeys[0].expiresAt) <= now) {
-                this.logger.log('Rotating access keys');
-                await this.addNewKey('access');
-            }
-
-            // Check and rotate refresh keys
-            const activeRefreshKeys = this.getActiveKeys().filter(k => k.type === 'refresh');
-            if (activeRefreshKeys.length === 0 || new Date(activeRefreshKeys[0].expiresAt) <= now) {
-                this.logger.log('Rotating refresh keys');
-                await this.addNewKey('refresh');
-            }
-
-            // Deactivate expired keys
-            this.keyStore.keys.forEach((key) => {
-                if (new Date(key.expiresAt) <= now) {
-                    key.active = false;
+            // Mark expired keys as inactive, but DON'T DELETE them
+            for (let i = 0; i < this.keyStore.keys.length; i++) {
+                const key = this.keyStore.keys[i];
+                
+                if (key.active && key.expiresAt <= now) {
+                    this.keyStore.keys[i] = {
+                        ...key,
+                        active: false
+                    };
+                    keysUpdated = true;
                 }
-            });
-
-            await this.updateKeyStore(this.keyStore);
+            }
+            
+            // Check if we need new access keys
+            const activeAccessKeys = this.getActiveKeys('access');
+            const accessExpiryBuffer = new Date(now);
+            accessExpiryBuffer.setDate(accessExpiryBuffer.getDate() + 1); // 1 day buffer
+            
+            if (forceRotation || activeAccessKeys.length === 0 || 
+                activeAccessKeys.every(key => key.expiresAt <= accessExpiryBuffer)) {
+                await this.addNewKey('access');
+                keysUpdated = true;
+            }
+            
+            // Check if we need new refresh keys
+            const activeRefreshKeys = this.getActiveKeys('refresh');
+            const refreshExpiryBuffer = new Date(now);
+            refreshExpiryBuffer.setDate(refreshExpiryBuffer.getDate() + 3); // 3 day buffer
+            
+            if (forceRotation || activeRefreshKeys.length === 0 || 
+                activeRefreshKeys.every(key => key.expiresAt <= refreshExpiryBuffer)) {
+                await this.addNewKey('refresh');
+                keysUpdated = true;
+            }
+            
+            if (keysUpdated) {
+                this.keyStore.lastRotation = now.toISOString();
+                await this.saveKeyStore();
+            }
         } catch (error) {
-            this.logger.error(`Error rotating keys: ${error}`);
+            this.logger.error(`Error during key rotation: ${error.message}`);
             throw error;
         }
     }
 
-    private GetAllKeys(): KeyPair[] {
-        return this.keyStore.keys;
-    }
-
-    private getActiveKeys(): KeyPair[] {
-        return this.keyStore.keys.filter(key => key.active);
+    private getActiveKeys(type?: 'access' | 'refresh'): KeyPair[] {
+        const activeKeys = this.keyStore.keys.filter(key => key.active);
+        return type ? activeKeys.filter(key => key.type === type) : activeKeys;
     }
 
     private async addNewKey(type: 'access' | 'refresh'): Promise<KeyPair> {
-        const newKey = this.GenerateNewKey(type);
-        this.keyStore.keys.push(newKey);
-        await this.updateKeyStore(this.keyStore);
-        return newKey;
-    }
-
-    private readAndParseFile(): KeyStore {
-        const filePath = path.join(process.cwd(), 'keys.json');
-        const fileContent = fs.readFileSync(filePath, 'utf-8');
-        this.logger.log(`File content read from ${filePath}`);
-        return JSON.parse(fileContent) as KeyStore;
-    }
-
-    private async updateKeyStore(keyStore: { keys: KeyPair[], lastRotation: string }): Promise<void> {
-        const filePath = path.join(process.cwd(), 'keys.json');
         try {
-            await fs.promises.writeFile(filePath, JSON.stringify(keyStore, null, 4));
-            this.logger.log('Key store updated successfully');
+            const newKey = this.generateNewKey(type);
+            
+            this.keyStore = {
+                ...this.keyStore,
+                keys: [...this.keyStore.keys, newKey]
+            };
+            
+            await this.saveKeyStore();
+            return newKey;
         } catch (error) {
-            this.logger.error(`Error updating key store: ${error}`);
+            this.logger.error(`Failed to add new key: ${error.message}`);
             throw error;
         }
     }
 
-    private loadKeysFromFile(): void {
+    private async saveKeyStore(): Promise<void> {
         try {
-            if (this.checkFile()) {
-                const loadedStore = this.readAndParseFile();
-                this.updateKeyStore(loadedStore);
-            } else {
-                this.logger.warn('No keys file found');
-                throw new Error('Keys file not found - please create a valid keys.json file');
-            }
-        } catch (error) {
-            this.logger.error(`Error loading keys from file: ${error}`);
-            this.keyStore = {
-                keys: [],
-                lastRotation: new Date().toISOString()
+            const serializableStore = {
+                ...this.keyStore,
+                keys: this.keyStore.keys.map(key => ({
+                    ...key,
+                    createdAt: key.createdAt.toISOString(),
+                    expiresAt: key.expiresAt.toISOString()
+                }))
             };
+            
+            const tempFilePath = `${this.KEY_FILE_PATH}.temp`;
+            
+            fs.writeFileSync(
+                tempFilePath, 
+                JSON.stringify(serializableStore, null, 4),
+                { encoding: 'utf8', mode: 0o600 }
+            );
+            
+            fs.renameSync(tempFilePath, this.KEY_FILE_PATH);
+        } catch (error) {
+            this.logger.error(`Error saving key store: ${error.message}`);
+            throw error;
         }
     }
 
-    private async loadKeyStore(): Promise<KeyPair[]> {
+    private async loadKeysFromFile(): Promise<void> {
         try {
-            const filePath = path.join(process.cwd(), 'keys.json');
-            
-            if (!fs.existsSync(filePath)) {
-                await this.createFile();
-                return this.keyStore.keys;
+            if (!fs.existsSync(this.KEY_FILE_PATH)) {
+                return;
             }
-
-            const data = await fs.promises.readFile(filePath, 'utf8');
+            
+            const data = fs.readFileSync(this.KEY_FILE_PATH, 'utf8');
             
             try {
                 const parsedData = JSON.parse(data);
-                if (parsedData && Array.isArray(parsedData.keys)) {
-                    this.keyStore = parsedData;
-                    return this.keyStore.keys;
+                
+                if (!parsedData || !Array.isArray(parsedData.keys)) {
+                    throw new Error('Invalid key store format');
                 }
                 
-                this.keyStore = {
-                    keys: [],
-                    lastRotation: new Date().toISOString()
-                };
-                await this.updateKeyStore(this.keyStore);
-                return this.keyStore.keys;
+                const processedKeys = parsedData.keys.map(key => ({
+                    ...key,
+                    createdAt: new Date(key.createdAt),
+                    expiresAt: new Date(key.expiresAt)
+                }));
                 
-            } catch (parseError) {
                 this.keyStore = {
-                    keys: [],
-                    lastRotation: new Date().toISOString()
+                    ...parsedData,
+                    keys: processedKeys
                 };
-                await this.updateKeyStore(this.keyStore);
-                return this.keyStore.keys;
+            } catch (parseError) {
+                const backupPath = `${this.KEY_FILE_PATH}.backup.${Date.now()}`;
+                fs.copyFileSync(this.KEY_FILE_PATH, backupPath);
+                
+                this.keyStore = { 
+                    keys: [], 
+                    lastRotation: new Date().toISOString() 
+                };
             }
         } catch (error) {
-            this.logger.error(`Error loading key store: ${error}`);
-            throw error;
+            this.keyStore = { 
+                keys: [], 
+                lastRotation: new Date().toISOString() 
+            };
         }
     }
-
 }

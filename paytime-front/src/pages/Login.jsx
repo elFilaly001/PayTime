@@ -40,17 +40,27 @@ export default function Login() {
 
   try {
     const response = await axiosInstance.post("/auth/login", data);
-    console.log(response);
+    console.log("Login response:", response.data);
 
     if (response.data.requiresOTP) {
       navigate("/otp", { state: { userId: response.data.userId } });
       return;
-    }else{
-      dispatch(setUser(response.data.User));
+    } else {
+      // Log the user data to make sure it has the _id property
+      console.log("Setting user in Redux:", response.data.User);
+      
+      // Make sure we're setting the ID property correctly
+      const userData = {
+        ...response.data.User,
+        _id: response.data.User.id || response.data.User._id
+      };
+      
+      dispatch(setUser(userData));
+      localStorage.setItem("accessToken", response.data.Access);
       navigate("/");
     }
   } catch (error) {
-    console.log(error);
+    console.error("Login error:", error);
   }
   };
 

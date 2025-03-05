@@ -29,7 +29,7 @@ export class JWTHelperService {
         return this.currentRefreshKey;
     }
 
-    private async createToken(userId: string, expiresIn: string, keyPair: KeyPair): Promise<string> {
+    private async createToken(userId: string, expiresIn: number, keyPair: KeyPair): Promise<string> {
         if (!keyPair || !keyPair.key) {
             throw new UnauthorizedException('Invalid key configuration');
         }

@@ -4,6 +4,7 @@ import Register from '../pages/Register'
 import OTP from '../pages/OTP'
 import HomePage from '../pages/Home'
 import Settings from '../pages/Settings'
+import Friends from '../pages/Friends'
 
 export default function Router() {
   return (
@@ -14,6 +15,7 @@ export default function Router() {
         <Route path="/login" element={<Login />} />
         <Route path="/otp" element={<OTP />} />
         <Route path="/Settings" element={<Settings />} />
+        <Route path="/friend-list" element={<Friends />} />
       </Routes>
     </BrowserRouter>
   )

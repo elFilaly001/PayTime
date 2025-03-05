@@ -7,7 +7,7 @@ export class StripeService {
 
   constructor(@Inject('STRIPE_API_KEY') private readonly apiKey: string) {
     this.stripe = new Stripe(this.apiKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2025-02-24.acacia' as any,
     });
   }
 

@@ -17,12 +17,13 @@ const PaymentCardManagement = () => {
     const [showModal, setShowModal] = useState(false);
 
 
-    // console.log(user);
+    console.log(user);
 
     useEffect(() => {
         async function fetchUserCards() {
             try {
                 const response = await axiosInstance.get(`/payment/Cards/${user.StripeCostumer}`);
+                console.log(response);
                 setCards(response.data);
             } catch (error) {
                 console.log(error);
