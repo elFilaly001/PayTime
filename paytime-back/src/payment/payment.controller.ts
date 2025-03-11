@@ -1,9 +1,11 @@
 import { Controller, Post, Delete, Body, Param, UseGuards, Get, Put } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { ProcessLoanRepaymentDto, RecordCashPaymentDto , CreatePaymentIdDto } from './dto/create-payment.dto';
+import { AuthGuard } from 'src/auth/auth.guard';
 import { get } from 'http';
 
 @Controller('payment')
+@UseGuards(AuthGuard)
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
@@ -13,7 +15,6 @@ export class PaymentController {
   ) {
     return this.paymentService.addCard(card);
   }
-
 
   @Get('cards/:costumerId')
   async GetUserCards(@Param('costumerId') costumerId: string) {

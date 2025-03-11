@@ -24,7 +24,11 @@ export class JWTHelperService {
 
     private async getRefreshKey(): Promise<KeyPair> {
         if (!this.currentRefreshKey) {
+            this.logger.debug('Getting new refresh key from key manager');
             this.currentRefreshKey = await this.keyManager.getCurrentRefreshKey();
+            this.logger.debug(`Got refresh key with id: ${this.currentRefreshKey.id}`);
+        } else {
+            this.logger.debug(`Using cached refresh key with id: ${this.currentRefreshKey.id}`);
         }
         return this.currentRefreshKey;
     }
@@ -61,6 +65,7 @@ export class JWTHelperService {
 
     async createRefreshToken(userId: string): Promise<string> {
         const keyPair = await this.getRefreshKey();
+        this.logger.debug(`Creating refresh token with key id: ${keyPair.id}`);
         return this.createToken(userId, this.configService.get('JWT_REFRESH_TIME'), keyPair);
     }
 

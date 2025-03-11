@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException, Logger, Req } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthDocument, Auth as User } from '../auth/Schema/Auth.schema';
@@ -32,16 +32,26 @@ export class FriendsService {
       throw new BadRequestException('Cannot send friend request to yourself');
     }
 
-    // Check if they're already friends
+    // Check if they're already friends (more thorough check)
     const alreadyFriends = fromUser.Friend_list.some(
-      friend => friend.toString() === data.toUserId
+      friend => friend._id?.toString() === data.toUserId || 
+                friend.toString() === data.toUserId
     );
 
     if (alreadyFriends) {
       throw new BadRequestException('Already friends with this user');
     }
 
-    // Check if request already exists
+    // Check if the recipient has already sent a request to the sender
+    const recipientRequestedSender = fromUser.Friend_requests.some(
+      req => req.from.toString() === data.toUserId && req.status === 'pending'
+    );
+
+    if (recipientRequestedSender) {
+      throw new BadRequestException('This user has already sent you a friend request. Accept it instead.');
+    }
+
+    // Check if sender already sent a request to recipient
     const existingRequest = toUser.Friend_requests.find(
       req => req.from.toString() === fromUserId && req.status === 'pending'
     );
@@ -83,6 +93,12 @@ export class FriendsService {
       throw new NotFoundException('User not found');
     }
 
+    // Get the user who sent the request
+    const requester = await this.userModel.findById(data.requestId);
+    if (!requester) {
+      throw new NotFoundException('Requester not found');
+    }
+
     // Find the friend request
     const requestIndex = user.Friend_requests.findIndex(
       req => req.from.toString() === data.requestId && req.status === 'pending'
@@ -93,7 +109,7 @@ export class FriendsService {
     }
 
     // Get the requester's username
-    const requesterUsername = user.Friend_requests[requestIndex].Username;
+    const requesterUsername = requester.Username || user.Friend_requests[requestIndex].Username;
 
     // 1. Remove the friend request from the recipient
     const updateRecipient = await this.userModel.updateOne(
@@ -101,19 +117,29 @@ export class FriendsService {
       {
         $pull: { 
           Friend_requests: { 
-            _id: new Types.ObjectId(data.requestId),
+            from: new Types.ObjectId(data.requestId),
             status: 'pending'
           } 
         },
-        $addToSet: { Friend_list: new Types.ObjectId(data.requestId) }
+        $addToSet: { 
+          Friend_list: {
+            _id: new Types.ObjectId(data.requestId),
+            Username: requesterUsername
+          } 
+        }
       }
     );
 
-    // 2. Add the recipient to the requester's friend list
+    // 2. Add the recipient to the requester's friend list with username
     const updateRequester = await this.userModel.updateOne(
       { _id: data.requestId },
       {
-        $addToSet: { Friend_list: new Types.ObjectId(userId) }
+        $addToSet: { 
+          Friend_list: {
+            _id: new Types.ObjectId(userId),
+            Username: user.Username
+          } 
+        }
       }
     );
 
@@ -192,5 +218,29 @@ export class FriendsService {
       username: user.Username,
       friendCode: user.Friend_Code
     }));
+  }
+
+
+  async getFriendRequests(userId: string) {
+    this.logger.debug(`Getting friend requests for user: ${userId}`);
+
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Log what we found
+    this.logger.debug(`Found ${user.Friend_requests?.length || 0} friend requests`);
+    
+    // Enhanced response for debugging
+    return {
+      requests: user.Friend_requests || [],
+      count: user.Friend_requests?.length || 0,
+      userId: userId
+    };
   }
 }

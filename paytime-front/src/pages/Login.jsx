@@ -57,6 +57,19 @@ export default function Login() {
       
       dispatch(setUser(userData));
       localStorage.setItem("accessToken", response.data.Access);
+      
+      // Store refresh token if received in the response
+      if (response.data.refreshToken) {
+        localStorage.setItem("refreshToken", response.data.refreshToken);
+      }
+      
+      // Check for test cookies to verify cookie functionality
+      const testCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('testVisibleCookie='));
+      
+      console.log("Test cookie found:", !!testCookie);
+      
       navigate("/");
     }
   } catch (error) {

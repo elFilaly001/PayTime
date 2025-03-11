@@ -4,31 +4,31 @@ import { RegisterDto, ResetPasswordEmailDto } from './dtos/Auth.dto';
 import { UseInterceptors } from '@nestjs/common';
 import { AuthInterceptor } from './Interceptors/auth.interceptor';
 import { LoginDto } from './dtos/Auth.dto';
-import { Response, Request } from 'express';
+import { Response, Request, request } from 'express';
 import { getDeviceInfo } from '../Helpers/Device.helper';
 import { VerifyOtpDto } from './dtos/Auth.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
 
-  @UseInterceptors(AuthInterceptor) 
+  @UseInterceptors(AuthInterceptor)
   @Post("register")
-  Rgister(@Body() Data : RegisterDto){ 
+  Rgister(@Body() Data: RegisterDto) {
     return this.authService.Register(Data);
   }
 
 
   @Post("login")
-  Login(@Body() Data : LoginDto, @Res({ passthrough: true }) res: Response, @Req() req: Request ){ 
+  Login(@Body() Data: LoginDto, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
     return this.authService.Login(Data, res, req);
   }
 
 
   @Get("refresh")
-    RefreshToken(@Req() req: Request) {
-    return this.authService.RefreshToken(req);
+  RefreshToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.authService.RefreshToken(req, res);
   }
 
   @Get('device-info')

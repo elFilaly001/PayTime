@@ -38,19 +38,11 @@ export class Auth {
   @Prop({ required: true, unique: true })
   Friend_Code: string;
 
-  @Prop({
-    type: [{
-      userId: { type: Types.ObjectId, ref: 'Auth' },
-      Username: { type: String },
-      addedAt: { type: Date, default: Date.now }
-    }],
-    default: []
-  })
-  Friend_list: {
-    userId: Types.ObjectId;
-    Username: string;
-    addedAt: Date;
-  }[];
+  @Prop({ type: [{ 
+    _id: { type: Types.ObjectId, ref: 'Auth' },
+    Username: { type: String }
+  }], default: [] })
+  Friend_list: Array<{ _id: Types.ObjectId, Username: string }>;
 
   @Prop({ type: [FriendRequestSchema], default: [] })
   Friend_requests: FriendRequest[];

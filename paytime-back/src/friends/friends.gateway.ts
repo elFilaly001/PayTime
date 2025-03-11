@@ -74,6 +74,7 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
         return;
       }
 
+
       await this.friendsService.sendFriendRequest(fromUserId, { toUserId });
 
       const recipientSocketId = this.userSocketMap.get(toUserId);
@@ -82,13 +83,9 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
           fromUserId,
           fromUsername: fromUser.Username
         });
-        
-        // After sending the request, clean up the socket connection
-        this.userSocketMap.delete(toUserId);
-        client.leave(this.getUserRoom(toUserId));
       }
 
-      this.logger.log(`Friend request sent and socket cleaned up for ${toUserId}`);
+      this.logger.log(`Friend request sent to room ${recipientSocketId}`);
     } catch (error) {
       this.logger.error(`Error sending friend request: ${error.message}`);
       client.emit('error', { message: error.message });
@@ -141,11 +138,20 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
       
       this.logger.log(`Rejecting friend request: from=${fromUserId}, to=${toUserId}`);
       
-      // Convert to the format expected by the service
       const friendRequestActionDto = { requestId: fromUserId };
       
       // Process rejection in database
       await this.friendsService.rejectFriendRequest(toUserId, friendRequestActionDto);
+
+      // Get user info for notification
+      const toUser = await this.userModel.findById(toUserId);
+      
+      // Notify the sender of the rejection through their room
+      const senderRoom = this.getUserRoom(fromUserId);
+      this.server.to(senderRoom).emit('friendRequestRejected', {
+        friend: toUserId,
+        fromUsername: toUser?.Username
+      });
       
       this.logger.log(`Friend request from ${fromUserId} to ${toUserId} rejected successfully`);
     } catch (error) {

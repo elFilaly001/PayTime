@@ -50,24 +50,19 @@ export default function FriendRequest({ text, User }) {
         setIsProcessing(true);
         try {
             console.log(`Rejecting friend request from ${User}`);
-
-            // First, update the database via REST API as a fallback
-            await axiosInstance.post("friends/reject-friend-request", {
-                requestId: User
-            });
             
-            // Update Redux state immediately for UI responsiveness
-            dispatch(removeFriendRequest(User));
-            
-            // Then notify via WebSocket if connected
+            // Try WebSocket first if connected
             if (isConnected) {
                 rejectFriendRequest(User);
+                // Update Redux state immediately for UI responsiveness
+                dispatch(removeFriendRequest(User));
+                toast.success("Friend request rejected");
+            } else {
+                toast.error("Failed to reject friend request");
             }
-            
-            toast.success("Friend request rejected");
         } catch (error) {
             console.error("Error rejecting friend request:", error);
-            toast.error(error.response?.data?.message || "Failed to reject friend request");
+            toast.error("Something went wrong");
         } finally {
             setIsProcessing(false);
         }

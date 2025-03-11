@@ -10,6 +10,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { PaymentModule } from './payment/payment.module';
 import { StripeModule } from './stripe/stripe.module';
 import { FriendsModule } from './friends/friends.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -26,7 +27,8 @@ import { FriendsModule } from './friends/friends.module';
       inject: [ConfigService],
     }),
     AuthModule, RedisModule, TickestModule, TransactionModule, PaymentModule, FriendsModule,
-    StripeModule.forRootAsync()
+    StripeModule.forRootAsync(),
+    TicketsModule
   ],
   controllers: [AppController],
   providers: [AppService],

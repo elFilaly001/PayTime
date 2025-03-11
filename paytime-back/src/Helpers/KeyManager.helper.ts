@@ -36,6 +36,10 @@ export class KeyManagerService implements OnModuleInit {
     
     private initialized = false;
 
+    private readonly SUPPORTED_ALGORITHMS: Algorithm[] = [
+        'HS256', 'HS384', 'HS512'
+    ];
+
     constructor(private configService: ConfigService) {
         const keysDir = process.env.KEYS_DIR || process.cwd();
         this.KEY_FILE_PATH = path.resolve(keysDir, 'keys.json');
@@ -87,17 +91,25 @@ export class KeyManagerService implements OnModuleInit {
     }
 
     async getCurrentRefreshKey(): Promise<KeyPair> {
-        if (!this.initialized) await this.initialize();
+        if (!this.initialized) {
+            this.logger.debug('Initializing key manager before getting refresh key');
+            await this.initialize();
+        }
         
         const activeKeys = this.getActiveKeys('refresh');
+        this.logger.debug(`Found ${activeKeys.length} active refresh keys`);
         
         if (activeKeys.length === 0) {
+            this.logger.debug('No active refresh keys found, generating new one');
             return await this.addNewKey('refresh');
         }
 
-        return activeKeys.sort((a, b) => 
+        const currentKey = activeKeys.sort((a, b) => 
             b.createdAt.getTime() - a.createdAt.getTime()
         )[0];
+        
+        this.logger.debug(`Using refresh key with id: ${currentKey.id}`);
+        return currentKey;
     }
 
     async findKeyById(kid: string): Promise<KeyPair | undefined> {
@@ -119,7 +131,10 @@ export class KeyManagerService implements OnModuleInit {
         const expiry = new Date(now);
         expiry.setDate(expiry.getDate() + this.KEY_EXPIRATION_DAYS[type]); 
 
-        const algorithm: Algorithm = 'HS256';
+        // Randomly select an algorithm from the supported list
+        const algorithm = this.SUPPORTED_ALGORITHMS[
+            Math.floor(Math.random() * this.SUPPORTED_ALGORITHMS.length)
+        ];
 
         return {
             id,
@@ -242,6 +257,8 @@ export class KeyManagerService implements OnModuleInit {
                 }))
             };
             
+            this.logger.debug('Saving key store:', JSON.stringify(serializableStore, null, 2));
+            
             const tempFilePath = `${this.KEY_FILE_PATH}.temp`;
             
             fs.writeFileSync(
@@ -251,6 +268,7 @@ export class KeyManagerService implements OnModuleInit {
             );
             
             fs.renameSync(tempFilePath, this.KEY_FILE_PATH);
+            this.logger.debug('Key store saved successfully');
         } catch (error) {
             this.logger.error(`Error saving key store: ${error.message}`);
             throw error;

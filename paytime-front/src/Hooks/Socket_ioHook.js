@@ -10,8 +10,10 @@ const DEBUG = true;
 const useSocketIO = (userId) => {
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [connectionError, setConnectionError] = useState(null);
   const dispatch = useDispatch();
   const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
   
   // Debug logger
   const debug = (message, data) => {
@@ -27,17 +29,25 @@ const useSocketIO = (userId) => {
       return;
     }
 
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setConnectionError('No authentication token found');
+      return;
+    }
+    
     const socketInstance = io(`${import.meta.env.VITE_BACK_APP_URL}/friends`, {
-      auth: { userId },
+      auth: { userId, token },
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: maxReconnectAttempts,
       reconnectionDelay: 1000,
+      timeout: 10000,
       transports: ['websocket', 'polling'],
     });
 
     socketInstance.on("connect", () => {
       debug(`Connected to WebSocket: ${socketInstance.id}`);
       setIsConnected(true);
+      setConnectionError(null);
       reconnectAttempts.current = 0;
       
       // Register with the server
@@ -49,6 +59,21 @@ const useSocketIO = (userId) => {
       console.error("Socket connection error:", error.message);
       reconnectAttempts.current += 1;
       setIsConnected(false);
+      setConnectionError(`Connection failed: ${error.message}`);
+      
+      if (reconnectAttempts.current >= maxReconnectAttempts) {
+        toast.error("Unable to connect to the server. Please check your connection and try again later.");
+        socketInstance.disconnect();
+      }
+    });
+
+    socketInstance.on("disconnect", (reason) => {
+      debug(`Disconnected from WebSocket: ${reason}`);
+      setIsConnected(false);
+      if (reason === "io server disconnect") {
+        setConnectionError("Disconnected by server");
+        toast.error("Disconnected from server. Please refresh the page.");
+      }
     });
 
     // Add specific handler for friend requests
@@ -148,6 +173,7 @@ const useSocketIO = (userId) => {
   
   return {
     isConnected,
+    connectionError,
     sendFriendRequest,
     acceptFriendRequest,
     rejectFriendRequest

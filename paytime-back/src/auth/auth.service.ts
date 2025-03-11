@@ -6,7 +6,7 @@ import { JWTHelperService } from '../Helpers/JWT.helpers';
 import { MailHelper } from '../Helpers/Mail.helper';
 import { ConfigService } from '@nestjs/config';
 import { HashPassword, VerifyPassword } from '../Helpers/Auth.helper';
-import { getCookie, setCookie } from '../Helpers/Cookies.helper';
+import { getCookie, setCookie, deleteCookie } from '../Helpers/Cookies.helper';
 import { Response, Request, request } from 'express';
 import { Logger } from '@nestjs/common';
 import { OTPHelper } from '../Helpers/OTP.helper';
@@ -116,12 +116,20 @@ export class AuthService {
                 const RefreshToken = await this.jwtHelper.createRefreshToken(user.id);
                 const AccessToken = await this.jwtHelper.createAccessToken(user.id);
 
+                this.logger.debug('Setting refresh token cookie:', { 
+                    userId: user.id,
+                    tokenId: RefreshToken.substring(0, 10) + '...' 
+                });
+
                 setCookie(res, "refreshToken", RefreshToken, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'strict',
-                    maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days
+                    secure: false,
+                    sameSite: 'lax',
+                    path: '/',
+                    maxAge: 10 * 24 * 60 * 60 * 1000
                 });
+
+                this.logger.debug('Cookie set, returning response with access token');
 
                 return {
                     requiresOTP: false,
@@ -136,16 +144,15 @@ export class AuthService {
                         Friend_requests: user.Friend_requests,
                         StripeCostumer: user.StripeCostumer
                     },
-                    Access: AccessToken,
+                    Access: AccessToken
                 };
             }
 
-            // For unrecognized devices, generate and send OTP
+            
             const otp = await this.otpHelper.generateOtp(user.id);
             await this.redisService.set(`otp:${user.id}`, otp);
             await this.mailHelper.sendOTPEmail(user.Email, otp);
 
-            // Return only the necessary information for OTP verification
             return {
                 requiresOTP: true,
                 userId: user.id,
@@ -153,23 +160,45 @@ export class AuthService {
             };
 
         } catch (error) {
+            this.logger.error('Login error:', error);
             throw error;
         }
-    } 
-    
-    async RefreshToken(req: Request) {
+    }
+
+    async RefreshToken(req: Request, res: Response) {
         try {
-            const RefreshToken = getCookie(req);
-            if (!RefreshToken) {
-                throw new NotFoundException('Refresh token not found');
+            const refreshToken = getCookie(req, 'refreshToken');
+            this.logger.debug('Refreshing token, current refresh token:', refreshToken ? refreshToken.substring(0, 10) + '...' : 'Not found');
+            
+            if (!refreshToken) {
+                throw new UnauthorizedException('Refresh token not found');
             }
-            const user = await this.jwtHelper.verifyToken(RefreshToken[1]);
-            if (!user) {
-                throw new UnauthorizedException('Invalid or expired refresh token');
+            
+            // Verify the refresh token
+            const userId = await this.jwtHelper.verifyToken(refreshToken);
+            if (!userId) {
+                throw new UnauthorizedException('Invalid refresh token');
             }
-            const AccessToken = await this.jwtHelper.createAccessToken(user);
-            return { Access: AccessToken };
+            
+            // Generate new tokens
+            const newRefreshToken = await this.jwtHelper.createRefreshToken(userId);
+            const newAccessToken = await this.jwtHelper.createAccessToken(userId);
+            
+            // Set the new refresh token in the cookie
+            setCookie(res, "refreshToken", newRefreshToken, {
+                httpOnly: true,
+                secure: false,
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 10 * 24 * 60 * 60 * 1000
+            });
+            
+            return { 
+                message: 'Token refreshed successfully',
+                Access: newAccessToken
+            };
         } catch (error) {
+            this.logger.error('Refresh token error:', error);
             throw error;
         }
     }
@@ -223,8 +252,8 @@ export class AuthService {
             // Set refresh token in HTTP-only cookie
             setCookie(res, "refreshToken", RefreshToken, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
+                secure: false,
+                sameSite: 'lax',
                 maxAge: 10 * 24 * 60 * 60 * 1000
             });
 
@@ -242,7 +271,7 @@ export class AuthService {
                     Friend_list: updatedUser.Friend_list,
                     Friend_requests: updatedUser.Friend_requests
                 },
-                Access: AccessToken,
+                Access: AccessToken
             };
         } catch (error) {
             await session.abortTransaction();
@@ -283,8 +312,13 @@ export class AuthService {
 
 
     async logout(res: Response) {
-        res.clearCookie('refreshToken');
-        return { message: 'Logged out successfully' };
+        try {
+            deleteCookie(res, 'refreshToken');
+            return { message: 'Logged out successfully' };
+        } catch (error) {
+            this.logger.error(`Error logging out: ${error.message}`);
+            throw error;
+        }
     }
 }
 

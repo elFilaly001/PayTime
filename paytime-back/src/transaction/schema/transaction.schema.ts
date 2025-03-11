@@ -7,7 +7,7 @@ export type TransactionDocument = HydratedDocument<Transaction>;
 
 @Schema()
 export class Transaction {
-    @Prop({ required: true })
+  @Prop({ required: true })
   senderId: string;
 
   @Prop({ required: true })
