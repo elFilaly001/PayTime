@@ -1,34 +1,59 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Get,
+  Put,
+  Query,
+  BadRequestException,
+  Req
+} from '@nestjs/common';
 import { TicketsService } from './tickets.service';
-import { CreateTicketDto } from './dto/create-ticket.dto';
-import { UpdateTicketDto } from './dto/update-ticket.dto';
+import {
+  CreateTicketDto,
+  ProcessAutomaticPaymentDto,
+  ProcessManualPaymentDto
+} from './dto/create-ticket.dto';
+import { AuthGuard } from '../auth/auth.guard';
+import { Request } from 'express';
+
+// Define the same interface here or consider moving it to a shared types file
+interface RequestWithUser extends Request {
+  user: {
+    username: string;
+    [key: string]: any;
+  }
+}
+
 
 @Controller('tickets')
+@UseGuards(AuthGuard)
 export class TicketsController {
-  constructor(private readonly ticketsService: TicketsService) {}
+  constructor(private readonly ticketsService: TicketsService) { }
 
   @Post()
-  create(@Body() createTicketDto: CreateTicketDto) {
-    return this.ticketsService.create(createTicketDto);
+  async createTicket(@Req() req: RequestWithUser, @Body() createTicketDto: CreateTicketDto) {
+    return this.ticketsService.createTicket(req.user.id, createTicketDto);
   }
 
   @Get()
-  findAll() {
-    return this.ticketsService.findAll();
+  async getTickets(
+    @Query('user') userId: string,
+    @Query('type') type: string,
+    @Query('status') status: string
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.ticketsService.getTicketsByUser(userId, type, status);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ticketsService.findOne(+id);
+  async getTicketById(@Param('id') id: string) {
+    return this.ticketsService.getTicketById(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTicketDto: UpdateTicketDto) {
-    return this.ticketsService.update(+id, updateTicketDto);
-  }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.ticketsService.remove(+id);
-  }
 }

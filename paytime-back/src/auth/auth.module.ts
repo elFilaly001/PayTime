@@ -31,7 +31,7 @@ import { AuthGuard } from './auth.guard';
     AuthService,
     AuthGuard,
     JWTHelperService,
-    KeyManagerService
+    KeyManagerService,
   ],
 })
 export class AuthModule {}
