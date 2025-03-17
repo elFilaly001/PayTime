@@ -9,6 +9,7 @@ const DEBUG = true;
 
 const useSocketIO = (userId) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
   const [socket, setSocket] = useState(null);
   const [connectionError, setConnectionError] = useState(null);
   const dispatch = useDispatch();
@@ -50,15 +51,23 @@ const useSocketIO = (userId) => {
       setConnectionError(null);
       reconnectAttempts.current = 0;
       
-      // Register with the server
+      // Explicitly register with the server and wait for confirmation
+      debug(`Sending registration for userId: ${userId}`);
       socketInstance.emit("register", userId);
-      debug(`Registered with userId: ${userId}`);
+    });
+
+    // Listen for registration confirmation
+    socketInstance.on("registered", (response) => {
+      debug('Registration confirmed by server', response);
+      setIsRegistered(true);
+      // toast.success("Connected to real-time notifications");
     });
 
     socketInstance.on("connect_error", (error) => {
       console.error("Socket connection error:", error.message);
       reconnectAttempts.current += 1;
       setIsConnected(false);
+      setIsRegistered(false);
       setConnectionError(`Connection failed: ${error.message}`);
       
       if (reconnectAttempts.current >= maxReconnectAttempts) {
@@ -70,6 +79,7 @@ const useSocketIO = (userId) => {
     socketInstance.on("disconnect", (reason) => {
       debug(`Disconnected from WebSocket: ${reason}`);
       setIsConnected(false);
+      setIsRegistered(false);
       if (reason === "io server disconnect") {
         setConnectionError("Disconnected by server");
         toast.error("Disconnected from server. Please refresh the page.");
@@ -173,6 +183,7 @@ const useSocketIO = (userId) => {
   
   return {
     isConnected,
+    isRegistered,
     connectionError,
     sendFriendRequest,
     acceptFriendRequest,

@@ -193,7 +193,7 @@ export class FriendsService {
   }
 
   async searchUsers(searchTerm: string, currentUserId: string) {
-    this.logger.debug(`Searching users with term: ${searchTerm}`);
+    this.logger.debug(`Searching users with term: ${searchTerm} , current user: ${currentUserId}`);
 
     if (!Types.ObjectId.isValid(currentUserId)) {
       throw new BadRequestException('Invalid user ID');

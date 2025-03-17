@@ -1,12 +1,13 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JWTHelperService } from '../Helpers/JWT.helpers';
+import { WsException } from '@nestjs/websockets';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private jwtHelper: JWTHelperService) {}
+  constructor(private jwtHelper: JWTHelperService) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+   const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {

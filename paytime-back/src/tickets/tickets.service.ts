@@ -23,43 +23,50 @@ export class TicketsService {
 
   async createTicket(userId: any, createTicketDto: CreateTicketDto): Promise<Tickets> {
     try {
-      if (!Types.ObjectId.isValid(createTicketDto.loaner)) {
-        throw new BadRequestException('Invalid loaner ID');
+      
+      if (!userId || !Types.ObjectId.isValid(userId)) {
+        throw new BadRequestException('Invalid or missing user ID');
+      }
+      
+      if (!createTicketDto.loaner || !Types.ObjectId.isValid(createTicketDto.loaner)) {
+        throw new BadRequestException('Invalid or missing loaner ID');
+      }
+      
+      const loaneeIdObj = new Types.ObjectId(userId);
+      const loanerIdObj = new Types.ObjectId(createTicketDto.loaner);
+      
+      const loanee = await this.authModel.findById(loaneeIdObj);
+      if (!loanee) {
+        throw new BadRequestException('User not found');
+      }
+      const friendList = loanee.Friend_list || [];
+      
+      const isFriend = friendList.some(friend => 
+        friend && friend._id && friend._id.toString() === loanerIdObj.toString()
+      );
+      
+      if (!isFriend) {
+        throw new BadRequestException('Loaner is not in your friend list');
       }
 
-      // Convert userId to ObjectId if it's not already one
-      let userIdObj;
-      try {
-        userIdObj = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
-      } catch (error) {
-        throw new BadRequestException('Invalid user ID format');
-      }
-
-      const user = await this.authModel.findById(userId);
-      const UserFriends = user.Friend_list;
-
-      if (!UserFriends.some(friend => friend._id.equals(createTicketDto.loaner))) {
-        throw new BadRequestException('Loaner and loanee are not friends');
-      }
-
-      // Create ticket with consistent ObjectId format for both fields
+      // Create the ticket with the correct field names from the schema
       const newTicket = new this.ticketModel({
-        loaner: new Types.ObjectId(createTicketDto.loaner),
-        loanee: userIdObj,
         amount: createTicketDto.amount,
-        Type: createTicketDto.Type,
-        Time: createTicketDto.scheduledTime || new Date(),
+        loanee: loaneeIdObj,
+        loaner: loanerIdObj,
         status: 'PENDING',
+        Type: createTicketDto.Type,
         Place: createTicketDto.Place
       });
 
-      this.logger.log(`Creating ticket with loaner: ${newTicket.loaner} and loanee: ${newTicket.loanee}`);
-      const createdTicket = await newTicket.save();
-
-      return createdTicket;
+      const savedTicket = await newTicket.save();
+      
+      return savedTicket;
     } catch (error) {
       this.logger.error(`Error creating ticket: ${error.message}`);
-      throw new BadRequestException(`Failed to create ticket: ${error.message}`);
+      throw error instanceof BadRequestException 
+        ? error 
+        : new BadRequestException(`Failed to create ticket: ${error.message}`);
     }
   }
 
@@ -85,9 +92,6 @@ export class TicketsService {
         query.status = status;
       }
 
-      this.logger.log(`Query: ${JSON.stringify(query)}`);
-
-      // Execute the query
       const tickets = await this.ticketModel.find(query)
         .sort({ Time: -1 })
         .exec();
@@ -100,9 +104,7 @@ export class TicketsService {
     }
   }
 
-  // /**
-  //  * Get a ticket by its ID
-  //  */
+
   async getTicketById(ticketId: string): Promise<Tickets> {
     try {
       if (!Types.ObjectId.isValid(ticketId)) {

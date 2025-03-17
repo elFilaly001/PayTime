@@ -8,7 +8,8 @@ import {
   Put,
   Query,
   BadRequestException,
-  Req
+  Req,
+  Logger
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import {
@@ -18,6 +19,7 @@ import {
 } from './dto/create-ticket.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { Request } from 'express';
+import { Types } from 'mongoose';
 
 // Define the same interface here or consider moving it to a shared types file
 interface RequestWithUser extends Request {
@@ -27,14 +29,22 @@ interface RequestWithUser extends Request {
   }
 }
 
-
 @Controller('tickets')
 @UseGuards(AuthGuard)
 export class TicketsController {
+  private readonly logger = new Logger(TicketsController.name);
+
   constructor(private readonly ticketsService: TicketsService) { }
 
   @Post()
   async createTicket(@Req() req: RequestWithUser, @Body() createTicketDto: CreateTicketDto) {
+    this.logger.debug(`Creating ticket - user: ${req.user}, dto: ${JSON.stringify(createTicketDto)}`);
+
+    if (!req.user) {
+      throw new BadRequestException('Authentication failed: User not found in request');
+    }
+    
+
     return this.ticketsService.createTicket(req.user.id, createTicketDto);
   }
 

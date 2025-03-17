@@ -8,10 +8,11 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { FriendsService } from './friends.service';
-import { Logger } from '@nestjs/common';
+import { Logger, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuthDocument, Auth as User } from '../auth/Schema/Auth.schema';
+import { WsGuard } from 'src/ws/ws.guard';
 import { FriendRequestActionDto } from './dto/Friends.dto';
 
 @WebSocketGateway({
@@ -36,11 +37,12 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
 
   handleConnection(client: Socket) {
     try {
-      // Get user ID from auth token or handshake data
-      const userId = client.handshake.auth.userId; // or however you're passing the user ID
+      const userId = client.handshake.auth.userId; 
       if (userId) {
         this.userSocketMap.set(userId, client.id);
         this.logger.log(`User ${userId} connected with socket ${client.id}`);
+      } else {
+        this.logger.warn(`Socket connected without userId: ${client.id}`);
       }
     } catch (error) {
       this.logger.error(`Connection error: ${error.message}`);
@@ -56,6 +58,26 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
         break;
       }
     }
+  }
+
+  @SubscribeMessage('register')
+  handleRegister(client: Socket, userId: string) {
+    if (!userId) {
+      this.logger.error('Registration attempted without userId');
+      return;
+    }
+    
+    this.userSocketMap.set(userId, client.id);
+    this.logger.log(`User ${userId} registered with socket ${client.id}`);
+    
+    // Confirm registration to client
+    client.emit('registered', { 
+      success: true, 
+      userId 
+    });
+    
+    // Log all registered users for debugging
+    this.logger.debug(`Currently connected users: ${Array.from(this.userSocketMap.entries()).map(([id, socket]) => `${id}:${socket}`).join(', ')}`);
   }
 
   @SubscribeMessage('sendFriendRequest')
@@ -77,15 +99,19 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
 
       await this.friendsService.sendFriendRequest(fromUserId, { toUserId });
 
+      // Debug all connected users
+      this.logger.debug(`Connected users when sending request: ${Array.from(this.userSocketMap.keys()).join(', ')}`);
+      
       const recipientSocketId = this.userSocketMap.get(toUserId);
       if (recipientSocketId) {
         this.server.to(recipientSocketId).emit('newFriendRequest', {
           fromUserId,
           fromUsername: fromUser.Username
         });
+        this.logger.log(`Friend request sent to socket ${recipientSocketId}`);
+      } else {
+        this.logger.warn(`Recipient ${toUserId} is not connected, could not send real-time notification`);
       }
-
-      this.logger.log(`Friend request sent to room ${recipientSocketId}`);
     } catch (error) {
       this.logger.error(`Error sending friend request: ${error.message}`);
       client.emit('error', { message: error.message });
@@ -256,6 +282,17 @@ export class FriendsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
     } catch (error) {
       this.logger.error(`Error sending message to room: ${error.message}`);
     }
+  }
+
+  @SubscribeMessage('checkUserOnline')
+  handleCheckUserOnline(client: Socket, userId: string) {
+    const isOnline = this.userSocketMap.has(userId);
+    client.emit('userOnlineStatus', { 
+      userId, 
+      isOnline, 
+      connectedUsers: Array.from(this.userSocketMap.keys()) 
+    });
+    this.logger.log(`User online check for ${userId}: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
   }
 
   private getUserRoom(userId: string): string {

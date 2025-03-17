@@ -1,31 +1,31 @@
-// Create in src/tickets/dto/ticket.dto.ts
-import { IsNotEmpty, IsString, IsNumber, IsEnum, IsOptional, IsBoolean, IsDate } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsEnum, IsOptional, IsBoolean, IsDate, IsMongoId } from 'class-validator';
 import { Types } from 'mongoose';
 
 export class CreateTicketDto {
-  @IsNotEmpty()
-  @IsString()
-  loaner: Types.ObjectId;
+  @IsMongoId()
+  loaner: string;
 
-  @IsNotEmpty()
   @IsNumber()
   amount: number;
-
-  @IsNotEmpty()
-  @IsEnum(['CASH', 'CARD'])
-  Type: string;
-
-  @IsNotEmpty()
+  
   @IsString()
-  Place: string;
-
+  Type: string;
+  
+  @IsString()
   @IsOptional()
-  @IsDate()
-  scheduledTime?: Date;
+  Place : string;
 
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description: string;
+  
+  @IsString()
   @IsOptional()
-  @IsBoolean()
-  createTransaction?: boolean;
+  userId?: string;
 }
 
 export class ProcessAutomaticPaymentDto {

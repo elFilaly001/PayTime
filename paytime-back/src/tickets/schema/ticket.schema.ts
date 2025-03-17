@@ -1,6 +1,6 @@
-
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+                          import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import * as mongoose from 'mongoose';
 
 export type TicketDocument = HydratedDocument<Tickets>;
 
@@ -29,4 +29,5 @@ export class Tickets {
     Place : string
 
 }
+
 export const TicketsSchema = SchemaFactory.createForClass(Tickets);

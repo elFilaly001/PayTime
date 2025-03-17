@@ -13,7 +13,7 @@ import FriendList from "../components/Cards/FriendList";
 
 export default function FriendsPage() {
     const user = useSelector((state) => state.user);
-    const { isConnected, sendFriendRequest } = useSocketIO(user._id);
+    const { isConnected, isRegistered, sendFriendRequest } = useSocketIO(user._id);
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
     const dispatch = useDispatch();
@@ -21,8 +21,9 @@ export default function FriendsPage() {
     useEffect(() => {
         console.log("Current user ID:", user._id);
         console.log("Socket connection status:", isConnected);
+        console.log("Socket registration status:", isRegistered);
         console.log("Friend requests:", user);
-    }, [user._id, isConnected]);
+    }, [user._id, isConnected, isRegistered]);
 
     const Friend_requests = user.Friend_requests || [];
 
@@ -34,22 +35,25 @@ export default function FriendsPage() {
                 return;
             }
 
-            // Try socket first if connected
-            if (isConnected) {
+            // Try socket first if connected and registered
+            if (isConnected && isRegistered) {
+                console.log(`Sending friend request via socket to: ${friendId}`);
                 const sent = sendFriendRequest(friendId);
                 if (!sent) {
                     throw new Error("Failed to send friend request via socket");
                 }
+                toast.success("Friend request sent successfully");
             } else {
                 // Fallback to REST API
+                console.log(`Sending friend request via REST API to: ${friendId}`);
                 await axiosInstance.post("friends/add-friend", {
                     toUserId: friendId
                 });
+                toast.success("Friend request sent successfully");
             }
 
             setSearchResults([]);
             setSearchTerm("");
-            toast.success("Friend request sent successfully");
         } catch (error) {
             console.error("Error details:", error.response?.data || error);
             toast.error(error.response?.data?.message || "Failed to send friend request");
