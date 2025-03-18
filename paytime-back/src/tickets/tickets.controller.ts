@@ -21,7 +21,6 @@ import { AuthGuard } from '../auth/auth.guard';
 import { Request } from 'express';
 import { Types } from 'mongoose';
 
-// Define the same interface here or consider moving it to a shared types file
 interface RequestWithUser extends Request {
   user: {
     username: string;
@@ -50,14 +49,12 @@ export class TicketsController {
 
   @Get()
   async getTickets(
-    @Query('user') userId: string,
-    @Query('type') type: string,
-    @Query('status') status: string
+    @Req() req: RequestWithUser,
   ) {
-    if (!userId) {
+    if (!req.user.id) {
       throw new BadRequestException('User ID is required');
     }
-    return this.ticketsService.getTicketsByUser(userId, type, status);
+    return this.ticketsService.getTicketsByUser(req.user.id,);
   }
 
   @Get(':id')

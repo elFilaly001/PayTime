@@ -130,11 +130,42 @@ export class TicketsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
       this.logger.log(`Creating ticket for user ${userId}`);
       const ticket = await this.ticketsService.createTicket(userId, createTicketDto);
       
+      // BROADCAST to all participants (this is the key fix)
+      this.broadcastNewTicket(ticket);
+      
       // Emit the created ticket back to the client
       return { success: true, ticket };
     } catch (error) {
       this.logger.error(`Failed to create ticket: ${error.message}`);
       return { success: false, error: error.message };
+    }
+  }
+  
+  // Fix the broadcastNewTicket method
+  private broadcastNewTicket(ticket) {
+    try {
+      this.logger.log(`Broadcasting ticket ${ticket._id} to all connected clients`);
+      
+      // First, broadcast to all participants (this is a more direct approach)
+      this.server.emit('newTicket', ticket);
+      
+      this.logger.log(`Broadcast complete. Active connections: ${this.userSocketMap.size}`);
+      this.logger.debug(`User-socket map: ${JSON.stringify(Array.from(this.userSocketMap.entries()))}`);
+      
+      // Additionally, try sending directly to participants if we can identify them
+      if (ticket.participants && Array.isArray(ticket.participants)) {
+        ticket.participants.forEach(participant => {
+          const participantId = typeof participant === 'object' ? participant._id : participant;
+          this.logger.debug(`Looking for socket for participant ${participantId}`);
+          
+          const socketId = this.userSocketMap.get(String(participantId));
+          if (socketId) {
+            this.logger.log(`Direct emit to participant ${participantId} on socket ${socketId}`);
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error broadcasting ticket: ${error.message}`, error.stack);
     }
   }
   

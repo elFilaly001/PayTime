@@ -41,19 +41,23 @@ export class TicketsService {
       }
       const friendList = loanee.Friend_list || [];
       
-      const isFriend = friendList.some(friend => 
+      const friend = friendList.find(friend => 
         friend && friend._id && friend._id.toString() === loanerIdObj.toString()
       );
       
-      if (!isFriend) {
+      if (!friend) {
         throw new BadRequestException('Loaner is not in your friend list');
       }
-
+      
+      const loanerName = friend.Username || 'Unknown';
+      
       // Create the ticket with the correct field names from the schema
       const newTicket = new this.ticketModel({
         amount: createTicketDto.amount,
         loanee: loaneeIdObj,
+        loaneeName: loanee.Username,
         loaner: loanerIdObj,
+        loanerName: loanerName,
         status: 'PENDING',
         Type: createTicketDto.Type,
         Place: createTicketDto.Place
@@ -71,7 +75,7 @@ export class TicketsService {
   }
 
 
-  async getTicketsByUser(userId: string, type?: string, status?: string): Promise<Tickets[]> {
+  async getTicketsByUser(userId: string): Promise<Tickets[]> {
     try {
       if (!Types.ObjectId.isValid(userId)) {
         throw new BadRequestException('Invalid user ID');
@@ -84,19 +88,12 @@ export class TicketsService {
         ]
       };
 
-      if (type && ['CASH', 'CARD'].includes(type)) {
-        query.Type = type;
-      }
 
-      if (status && ['PENDING', 'PAYED', 'FAILED', 'OVERDUE'].includes(status)) {
-        query.status = status;
-      }
 
       const tickets = await this.ticketModel.find(query)
         .sort({ Time: -1 })
         .exec();
-
-      this.logger.log(`Found ${tickets.length} tickets`);
+2
       return tickets;
     } catch (error) {
       this.logger.error(`Error fetching tickets: ${error.message}`);

@@ -11,7 +11,13 @@ export class Tickets {
     loaner: Types.ObjectId;
 
     @Prop({ required: true })
+    loanerName: string;
+
+    @Prop({ required: true })
     loanee: Types.ObjectId;
+
+    @Prop({ required: true })
+    loaneeName: string;
 
     @Prop({ required: true })
     amount: number;

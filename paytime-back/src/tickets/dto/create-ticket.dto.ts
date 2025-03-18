@@ -5,6 +5,7 @@ export class CreateTicketDto {
   @IsMongoId()
   loaner: string;
 
+
   @IsNumber()
   amount: number;
   

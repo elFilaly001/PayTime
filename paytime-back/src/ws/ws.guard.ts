@@ -11,12 +11,11 @@ export class WsGuard implements CanActivate {
     context: ExecutionContext,
   ): Promise<boolean> {
 
-    console.log('Websocket guard activated');
     const client = context.switchToWs().getClient();
     // console.log('Websocket client: ', client);
     const token = this.extractTokenFromHeader(client);
 
-    console.log(`WebSocket connection attempt with token: ${token}`);
+    // console.log(`WebSocket connection attempt with token: ${token}`);
 
 
     if (!token) {
@@ -36,7 +35,7 @@ export class WsGuard implements CanActivate {
 
   private extractTokenFromHeader(client: any): string | undefined {
     const [type, token] = client.handshake.headers.authorization?.split(' ') ?? [];
-    console.log(`Extracted token: ${token}`);
+    // console.log('Type: ', client.handshake.headers);
     return type === 'Bearer' ? token : undefined;
   }
 }
