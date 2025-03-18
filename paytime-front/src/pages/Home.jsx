@@ -6,7 +6,7 @@ import SideBar from "../components/Bars/Sidebar";
 import Tickets from "../components/Cards/Tickets";
 import CreateTicketModal from "../components/Modals/CreateTicketModal";
 import useTicketSocket from "../Hooks/TicketSocketHook";
-import toast from "react-hot-toast"; // Add this import
+import { toast, Toaster } from "react-hot-toast";
 
 export default function HomePage() {
     const user = useSelector((state) => state.user);
@@ -67,21 +67,12 @@ export default function HomePage() {
                     return prevTickets;
                 }
                 
-                // Show toast notification
-                toast.success(`Ticket updated: ${newTicket.title || 'Untitled ticket'}`, {
-                    duration: 4000,
-                    position: 'top-right',
-                });
-                
                 console.log(`Adding ticket ${newTicket._id} to state`);
                 return [...prevTickets, newTicket];
             });
         };
-
-        // Register event handler with socket
         socket.on('newTicket', handleNewTicket);
         
-        // Force a reregistration to ensure the server knows about this client
         socket.emit('register', user?._id);
         
         return () => {
@@ -100,7 +91,7 @@ export default function HomePage() {
             console.log('Ticket created:', newTicket);
             
             // Immediately add the new ticket to local state without waiting for socket
-            setTickets(prevTickets => [...prevTickets, newTicket]);
+            // setTickets(prevTickets => [...prevTickets, newTicket]);
             
             // Dismiss loading toast and show success
             toast.dismiss(loadingToast);
@@ -121,6 +112,8 @@ export default function HomePage() {
     };
 
     return (
+        <>
+        <Toaster />
         <div className="flex flex-col min-h-screen">
             <NavBar />
             <div className="flex flex-1">
@@ -157,8 +150,9 @@ export default function HomePage() {
                     onClose={toggleCreateModal}
                     onSubmit={handleCreateTicket}
                     Friend_list={friends} // Pass the friends from local state
-                />
-            )}
+                    />
+                )}
         </div>
+                </>
     );
 }
