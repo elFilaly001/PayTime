@@ -20,8 +20,8 @@ export function setCookie(
   const defaultOptions = {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     httpOnly: true,
-    secure: false,
-    sameSite: 'lax' as const,
+    secure: true,
+    sameSite: 'strict' as const,
     path: '/',
   };
 
