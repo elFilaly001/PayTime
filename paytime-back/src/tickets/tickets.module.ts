@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+import { TicketsProcessor } from './tickets.processor';
+import { StripeModule } from '../stripe/stripe.module';
 import { TicketsGateway } from './tickets.gateway';
 import { TicketsService } from './tickets.service';
 import { TicketsController } from './tickets.controller';
@@ -12,9 +15,13 @@ import { TicketsSchema } from './schema/ticket.schema';
     MongooseModule.forFeature([{ name: 'Tickets', schema: TicketsSchema }]),
     MongooseModule.forFeature([{ name: 'Auth', schema: AuthSchema }]),
     AuthModule,
+    BullModule.registerQueue({
+      name: 'tickets',
+    }),
+    StripeModule,
   ],
   controllers: [TicketsController],
-  providers: [TicketsGateway, TicketsService],
+  providers: [TicketsGateway, TicketsService, TicketsProcessor],
   exports: [TicketsService],
 })
 export class TicketsModule {}

@@ -10,6 +10,7 @@ import { PaymentModule } from './payment/payment.module';
 import { StripeModule } from './stripe/stripe.module';
 import { FriendsModule } from './friends/friends.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
@@ -23,6 +24,15 @@ import { TicketsModule } from './tickets/tickets.module';
           uri: configService.get<string>('MONGO_URI'),
         };
       },
+      inject: [ConfigService],
+    }),
+    BullModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        redis: {
+          host: configService.get('REDIS_HOST', 'localhost'),
+          port: configService.get('REDIS_PORT', 6379),
+        },
+      }),
       inject: [ConfigService],
     }),
     AuthModule, RedisModule, TransactionModule, PaymentModule, FriendsModule,

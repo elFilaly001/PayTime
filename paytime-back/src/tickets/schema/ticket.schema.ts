@@ -1,4 +1,4 @@
-                          import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import * as mongoose from 'mongoose';
 
@@ -22,11 +22,8 @@ export class Tickets {
     @Prop({ required: true })
     amount: number;
 
-    @Prop({ required: true , enum: ["CASH", "CARD"]})
+    @Prop({ required: true , enum: ["CASH", "MANUAL_CARD" , "AUTO_CARD"]})
     Type: string
-
-    @Prop({ required: true , default : Date.now()})
-    Time: Date;
 
     @Prop({ required: true, enum: ['PENDING', 'PAYED', 'FAILED' , "OVERDUE"] , default : "PENDING"})
     status: string;
@@ -34,6 +31,14 @@ export class Tickets {
     @Prop({ required: true })
     Place : string
 
+    @Prop({ default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) })
+    dueDate: Date;
+
+    @Prop()
+    paymentId: string;
+
+    @Prop()
+    paidAt: Date;
 }
 
 export const TicketsSchema = SchemaFactory.createForClass(Tickets);

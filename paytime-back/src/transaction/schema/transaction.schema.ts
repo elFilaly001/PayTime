@@ -1,58 +1,36 @@
-import { Schema , Prop , SchemaFactory } from "@nestjs/mongoose";
-import { HydratedDocument , Schema as MongooseSchema } from "mongoose";
-
+import { Schema, Prop, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument, Schema as MongooseSchema } from "mongoose";
 
 export type TransactionDocument = HydratedDocument<Transaction>;
 
+export enum TransactionStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  FAILED = 'failed'
+}
 
-@Schema()
+@Schema({ timestamps: true })
 export class Transaction {
-  @Prop({ required: true })
-  senderId: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Tickets', required: true })
+  ticketId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ required: true })
-  receiverId: string;
-
-  @Prop({ required: true })
-  amount: number;
-
-  @Prop({ 
-    type: String, 
-    enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'CASH_PENDING_CONFIRMATION'],
-    default: 'PENDING'
-  })
-  status: string;
-
-  @Prop({ 
-    type: String, 
-    enum: ['LOAN', 'REPAYMENT', 'REFUND', 'CASH_PAYMENT'],
-    required: true 
-  })
-  type: string;
-
-  @Prop({ 
-    type: String, 
-    enum: ['STRIPE', 'CASH'],
-    required: true
-  })
+  @Prop({ required: true, enum: ['MANUAL_CARD', 'AUTO_CARD', 'CASH'] })
   paymentMethod: string;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Payment' })
   paymentId: MongooseSchema.Types.ObjectId;
-
-  @Prop({ type: MongooseSchema.Types.Mixed })
-  metadata?: {
-    loanId?: string;
-    description?: string;
-    notes?: string;
-    meetingLocation?: string;
-    meetingDate?: Date;
-    confirmationNotes?: string;
-  };
-
-  @Prop()
-  error?: string;
-
+  
+  @Prop({ required: true, enum: Object.values(TransactionStatus), default: TransactionStatus.PENDING })
+  status: string;
+  
+  @Prop({ required: false })
+  stripePaymentMethodId: string;
+  
+  @Prop({ required: false })
+  description: string;
+  
+  @Prop({ required: false })
+  errorMessage: string;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);

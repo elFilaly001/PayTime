@@ -61,7 +61,8 @@ export class StripeService {
     amount: number, 
     currency: string, 
     paymentMethodId: string, 
-    customerId: string
+    customerId: string,
+    options?: { idempotencyKey?: string }
   ): Promise<Stripe.PaymentIntent> {
     return this.stripe.paymentIntents.create({
       amount: Math.round(amount * 100),
@@ -71,6 +72,8 @@ export class StripeService {
       confirm: true,
       off_session: true,
       description: 'Loan Repayment',
+    }, {
+      idempotencyKey: options?.idempotencyKey
     });
   }
 
@@ -82,5 +85,49 @@ export class StripeService {
 
   async detachPaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
     return this.stripe.paymentMethods.detach(paymentMethodId);
+  }
+
+  // Process payment from loanee
+  async processPayment(amount: number, currency: string, paymentMethodId: string, description: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency,
+      payment_method: paymentMethodId,
+      confirmation_method: 'manual',
+      confirm: true,
+      description
+    });
+  }
+
+  // Send payout to loaner
+  async sendPayout(amount: number, currency: string, destination: string, description: string): Promise<Stripe.Payout> {
+    return this.stripe.payouts.create({
+      amount: Math.round(amount * 100),
+      currency,
+      method: 'instant', // or 'standard' for non-instant transfers
+      destination,
+      description
+    });
+  }
+
+  // Get or create bank account for user
+  async getBankAccount(userId: string): Promise<string> {
+    // In a real implementation, you'd store and retrieve bank accounts
+    // For test mode, we can create a test bank account
+    
+    // This is just for testing - in production you'd retrieve from your database
+    const testBankAccount = await this.stripe.accounts.createExternalAccount('acct_123', {
+      external_account: {
+        object: 'bank_account',
+        country: 'US',
+        currency: 'usd',
+        account_holder_name: 'Test User',
+        account_holder_type: 'individual',
+        routing_number: '110000000', // Test routing number
+        account_number: '000123456789' // Test account number
+      }
+    });
+    
+    return testBankAccount.id;
   }
 }

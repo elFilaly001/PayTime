@@ -9,7 +9,7 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit
 } from '@nestjs/websockets';
-import { Logger, Injectable , UseGuards } from '@nestjs/common';
+import { Logger, Injectable, UseGuards, Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -31,6 +31,7 @@ export class TicketsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
   server: Server;
   
   constructor(
+    @Inject(forwardRef(() => TicketsService))
     private readonly ticketsService: TicketsService,
   ) {}
 
@@ -168,6 +169,53 @@ export class TicketsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
       this.logger.error(`Error broadcasting ticket: ${error.message}`, error.stack);
     }
   }
-  
+
+  /**
+   * Broadcasts a ticket status update to both parties involved
+   * @param ticket The ticket with updated status
+   */
+  public broadcastTicketStatusUpdate(ticket) {
+    try {
+      this.logger.log(`Broadcasting status update for ticket ${ticket._id} - Status: ${ticket.status}`);
+      
+      // Broadcast to all connected clients (general update)
+      this.server.emit('ticketStatusUpdate', {
+        ticketId: ticket._id,
+        status: ticket.status,
+        updatedAt: new Date()
+      });
+      
+      // Send direct notifications to the loaner and loanee
+      if (ticket.loaner) {
+        const loanerSocketId = this.userSocketMap.get(String(ticket.loaner));
+        if (loanerSocketId) {
+          this.logger.debug(`Sending status update to loaner ${ticket.loaner} (Socket: ${loanerSocketId})`);
+          this.server.to(loanerSocketId).emit('ticketStatusUpdate', {
+            ticketId: ticket._id,
+            status: ticket.status,
+            role: 'loaner',
+            updatedAt: new Date()
+          });
+        }
+      }
+      
+      if (ticket.loanee) {
+        const loaneeSocketId = this.userSocketMap.get(String(ticket.loanee));
+        if (loaneeSocketId) {
+          this.logger.debug(`Sending status update to loanee ${ticket.loanee} (Socket: ${loaneeSocketId})`);
+          this.server.to(loaneeSocketId).emit('ticketStatusUpdate', {
+            ticketId: ticket._id,
+            status: ticket.status,
+            role: 'loanee',
+            updatedAt: new Date()
+          });
+        }
+      }
+      
+      this.logger.log(`Status update broadcast complete for ticket ${ticket._id}`);
+    } catch (error) {
+      this.logger.error(`Error broadcasting ticket status update: ${error.message}`, error.stack);
+    }
+  }
 }
 

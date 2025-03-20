@@ -5,7 +5,6 @@ export class CreateTicketDto {
   @IsMongoId()
   loaner: string;
 
-
   @IsNumber()
   amount: number;
   
@@ -27,6 +26,10 @@ export class CreateTicketDto {
   @IsString()
   @IsOptional()
   userId?: string;
+
+  @IsOptional()
+  @IsDate()
+  dueDate?: Date;
 }
 
 export class ProcessAutomaticPaymentDto {
