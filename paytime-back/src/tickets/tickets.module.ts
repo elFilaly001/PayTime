@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { TicketsProcessor } from './tickets.processor';
 import { StripeModule } from '../stripe/stripe.module';
@@ -8,20 +8,26 @@ import { TicketsController } from './tickets.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { AuthSchema } from '../auth/Schema/Auth.schema';
-import { TicketsSchema } from './schema/ticket.schema';
+import { Tickets, TicketsSchema } from './schema/ticket.schema';
+import { TransactionSchema } from '../transaction/schema/transaction.schema';
+import { TransactionModule } from 'src/transaction/transaction.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: 'Tickets', schema: TicketsSchema }]),
-    MongooseModule.forFeature([{ name: 'Auth', schema: AuthSchema }]),
+    MongooseModule.forFeature([
+      { name: Tickets.name, schema: TicketsSchema },
+      { name: 'Auth', schema: AuthSchema },
+      { name: "transaction", schema: TransactionSchema },
+    ]),
     AuthModule,
     BullModule.registerQueue({
       name: 'tickets',
     }),
     StripeModule,
+    forwardRef(() => TransactionModule),
   ],
   controllers: [TicketsController],
-  providers: [TicketsGateway, TicketsService, TicketsProcessor],
-  exports: [TicketsService],
+  providers: [TicketsService, TicketsGateway, TicketsProcessor],
+  exports: [TicketsService, MongooseModule],
 })
 export class TicketsModule {}

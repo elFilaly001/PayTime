@@ -17,7 +17,7 @@ export class TransactionController {
   @Post('pay-card/:ticketId')
   @UseGuards(AuthGuard)
   async payCard(@Param('ticketId') ticketId: string, @Request() req) {
-    return this.transactionService.payWithCard(ticketId, req.user.id);
+    return this.transactionService.payWithCard(ticketId, req.user.id , "MANUAL_CARD");
   }
   
   @Get('ticket/:ticketId')

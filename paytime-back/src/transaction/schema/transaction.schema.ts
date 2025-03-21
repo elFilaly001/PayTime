@@ -20,11 +20,9 @@ export class Transaction {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Payment' })
   paymentId: MongooseSchema.Types.ObjectId;
   
-  @Prop({ required: true, enum: Object.values(TransactionStatus), default: TransactionStatus.PENDING })
+  @Prop({ required: true,  default: TransactionStatus.PENDING })
   status: string;
   
-  @Prop({ required: false })
-  stripePaymentMethodId: string;
   
   @Prop({ required: false })
   description: string;

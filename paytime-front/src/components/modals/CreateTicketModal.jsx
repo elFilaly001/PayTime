@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 
 const CreateTicketModal = ({ isOpen, onClose, onSubmit, Friend_list = [] }) => {
   // Create initial state with default values
-  const initialTicketState = { Type: "CASH" };
+  const initialTicketState = { 
+    Type: "CASH", 
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 7 days from now
+  };
   
   const [ticketData, setTicketData] = useState(initialTicketState);
   const [loadedFriends, setLoadedFriends] = useState([]);
@@ -121,8 +124,9 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, Friend_list = [] }) => {
               onChange={handleChange}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="CASH" >Cash</option>
-              <option value="CARD">Card</option>
+              <option value="CASH" >Cash payment</option>
+              <option value="MANUAL_CARD">Manual card payment</option>
+              <option value="AUTO_CARD">Automatic payment</option>
             </select>
           </div>
           
@@ -135,6 +139,18 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, Friend_list = [] }) => {
               value={ticketData.Place || ''}
               onChange={handleChange}
               placeholder="e.g. Starbucks"
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          
+          {/* Due Date */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Due Date and Time</label>
+            <input
+              type="datetime-local"
+              name="dueDate"
+              value={ticketData.dueDate ? ticketData.dueDate.slice(0, 16) : ''}
+              onChange={handleChange}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

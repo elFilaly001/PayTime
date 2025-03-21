@@ -10,6 +10,9 @@ import { Logger } from '@nestjs/common';
 import { Auth } from '../auth/Schema/Auth.schema';
 import { SchedulerHelper } from '../Helpers/scheduler.helper';
 import { TicketsGateway } from './tickets.gateway';
+import { TransactionService } from '../transaction/transaction.service';
+import { Payments } from '../payment/schema/payment.schema';
+
 
 @Injectable()
 export class TicketsService implements OnModuleInit {
@@ -18,10 +21,11 @@ export class TicketsService implements OnModuleInit {
   constructor(
     @InjectModel('Tickets') private ticketModel: Model<Tickets>,
     @InjectModel('Auth') private authModel: Model<Auth>,
+    @InjectModel('Payments') private PaymentModel: Model<Payments>,
     @InjectQueue('tickets') private ticketsQueue: Queue,
-    private stripeService: StripeService,
     @Inject(forwardRef(() => TicketsGateway))
-    private ticketsGateway: TicketsGateway
+    private ticketsGateway: TicketsGateway,
+    private TransactionService: TransactionService
   ) { }
 
   async onModuleInit() {
@@ -108,6 +112,7 @@ export class TicketsService implements OnModuleInit {
       const loanerIdObj = new Types.ObjectId(createTicketDto.loaner);
       
       const loanee = await this.authModel.findById(loaneeIdObj);
+      const loaner = await this.authModel.findById(loanerIdObj);
       if (!loanee) {
         throw new BadRequestException('User not found');
       }
@@ -121,10 +126,17 @@ export class TicketsService implements OnModuleInit {
         throw new BadRequestException('Loaner is not in your friend list');
       }
       
-      const loanerName = friend.Username || 'Unknown';
+      const loanerName = friend.Username
       
       const dueDate = createTicketDto.dueDate ? new Date(createTicketDto.dueDate) : 
                       new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const loaneePaymentMethod = await this.PaymentModel.find({ stripeCustomerId : loanee.StripeCostumer });
+      const loanerPaymentMethod = await this.PaymentModel.find({ stripeCustomerId : loaner.StripeCostumer });
+
+      if (createTicketDto.Type === "AUTO_CARD" && (loaneePaymentMethod.length === 0 || loanerPaymentMethod.length === 0)) {
+        throw new BadRequestException('No payment method found for loaner or loanee');
+      }
       
       const newTicket = new this.ticketModel({
         amount: createTicketDto.amount,
@@ -139,17 +151,12 @@ export class TicketsService implements OnModuleInit {
       });
 
       const savedTicket = await newTicket.save();
-      this.logger.log(`Ticket created successfully - ID: ${savedTicket._id}, due date: ${savedTicket.dueDate}`);
-      
-      // Schedule the job for ticket processing using SchedulerHelper
-      this.logger.debug(`Scheduling processing job for ticket ${savedTicket._id}`);
       await SchedulerHelper.scheduleJob(
         this.ticketsQueue,
         'process-ticket',
         { ticketId: savedTicket._id.toString() },
         savedTicket.dueDate
       );
-      this.logger.log(`Processing job scheduled for ticket ${savedTicket._id}`);
       
       return savedTicket;
     } catch (error) {
@@ -162,7 +169,6 @@ export class TicketsService implements OnModuleInit {
 
   // Process overdue tickets
   async processOverdueTicket(ticketId: string): Promise<void> {
-    this.logger.debug(`Processing potentially overdue ticket: ${ticketId}`);
     
     try {
       const ticket = await this.getTicketById(ticketId);
@@ -191,8 +197,45 @@ export class TicketsService implements OnModuleInit {
       }
       
       this.logger.log(`Ticket ${ticketId} is overdue. Due date was ${dueDate.toLocaleString()}. Marking as OVERDUE status`);
+
+      if (ticket.Type === "AUTO_CARD") {
+        try {
+          const newTransaction = await this.TransactionService.payWithCard(
+            ticketId, 
+            ticket.loanee.toString(),
+            "AUTO_CARD"
+          );
       
-      // Update the ticket status to overdue
+          if (newTransaction) {
+            // Update ticket to PAID status
+            const updateData = { 
+              status: 'PAID', // Consistent naming
+              updatedAt: new Date(),
+              paidAt: new Date(),
+              paymentId: newTransaction.paymentId
+            };
+        
+            const updatedTicket = await this.ticketModel.findByIdAndUpdate(
+              ticketId, 
+              updateData, 
+              { new: true }
+            ).exec();
+            
+            if (!updatedTicket) {
+              this.logger.error(`Failed to update ticket ${ticketId}`);
+              return;
+            }
+            
+            this.ticketsGateway.broadcastTicketStatusUpdate(updatedTicket);
+            return;
+          }
+        } catch (error) {
+          this.logger.error(`Failed to process AUTO_CARD payment: ${error.message}`);
+          // Continue to mark as OVERDUE if payment fails
+        }
+      }
+      
+      // If AUTO_CARD processing fails or not AUTO_CARD, mark as OVERDUE
       const updateData = { 
         status: 'OVERDUE',
         updatedAt: new Date()
@@ -202,27 +245,19 @@ export class TicketsService implements OnModuleInit {
         ticketId, 
         updateData, 
         { new: true }
-      ).exec(); // Add .exec() to ensure the query runs
+      ).exec();
       
       if (!updatedTicket) {
         this.logger.error(`Failed to update ticket ${ticketId}`);
         return;
       }
-      
       this.logger.log(`Successfully marked ticket ${ticketId} as overdue`);
+      this.ticketsGateway.broadcastTicketStatusUpdate(updatedTicket);
       
       // Send notification to all parties via WebSocket
       this.logger.log(`Broadcasting overdue status for ticket ${ticketId} to involved parties`);
-      this.ticketsGateway.broadcastTicketStatusUpdate(updatedTicket);
       
-      // // If ticket is of type AUTO_CARD, attempt automatic payment
-      // if (updatedTicket.Type === 'AUTO_CARD') {
-      //   try {
-      //     await this.processAutomaticPayment(updatedTicket);
-      //   } catch (error) {
-      //     this.logger.error(`Failed automatic payment for ticket ${ticketId}: ${error.message}`);
-      //   }
-      // }
+      
     } catch (error) {
       this.logger.error(`Error processing overdue ticket ${ticketId}: ${error.message}`, error.stack);
     }

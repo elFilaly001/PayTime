@@ -1,7 +1,10 @@
 import React from 'react';
-import { Check , Trash , CreditCard , X , ChevronDown} from 'lucide-react';
+import { Check, Trash, CreditCard, X, ChevronDown } from 'lucide-react';
 
-const PaymentCard = ({ card, onDelete, onSetDefault }) => {
+const PaymentCard = ({ card, onDelete, onSetDefault, isDefaultFromStore }) => {
+    // Check both local and store default status
+    const isDefault = card.isDefault || isDefaultFromStore;
+    
     const cardTypeColor = {
       "visa": "bg-gradient-to-r from-blue-500 to-blue-700",
       "mastercard": "bg-gradient-to-r from-red-500 to-yellow-500",
@@ -9,8 +12,6 @@ const PaymentCard = ({ card, onDelete, onSetDefault }) => {
       "discover": "bg-gradient-to-r from-orange-500 to-orange-700"
     };
     
-    
-  
     const getCardLogo = (type) => {
       if (type === "visa") return "VISA";
       if (type === "mastercard") return "MasterCard";
@@ -28,7 +29,7 @@ const PaymentCard = ({ card, onDelete, onSetDefault }) => {
         <div className="p-5 h-full flex flex-col justify-between">
           <div className="flex justify-between items-center">
             <span className="font-bold text-xl tracking-wide">{getCardLogo(card.cardBrand)}</span>
-            {card.isDefault && (
+            {isDefault && (
               <span className="bg-white bg-opacity-20 text-white text-xs px-3 py-1 rounded-full flex items-center">
                 <Check className="w-3 h-3 mr-1" /> Default
               </span>
@@ -42,13 +43,13 @@ const PaymentCard = ({ card, onDelete, onSetDefault }) => {
             <span>{card.expiryMonth}/{card.expiryYear}</span>
           </div>
         </div>
-        {!card.isDefault && (
-          <button onClick={() => onDelete(card._id)} className="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full">
+        {!isDefault && (
+          <button onClick={() => onDelete(card.id || card._id)} className="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full">
             <Trash className="w-4 h-4" />
           </button>
         )}
-        {!card.isDefault && (
-          <button onClick={() => onSetDefault(card._id)} className="absolute bottom-3 right-3 bg-green-500 hover:bg-green-600 text-white p-2 rounded-full text-xs">
+        {!isDefault && (
+          <button onClick={() => onSetDefault(card.id || card._id)} className="absolute bottom-3 right-3 bg-green-500 hover:bg-green-600 text-white p-2 rounded-full text-xs">
             Set as Default
           </button>
         )}

@@ -10,14 +10,18 @@ import { Tickets, TicketsSchema } from '../tickets/schema/ticket.schema';
 import { StripeModule } from '../stripe/stripe.module';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
-import { PaymentsSchema } from '../payment/schema/payment.schema';
+import { Payments, PaymentsSchema } from '../payment/schema/payment.schema';
+import { Auth , AuthSchema } from 'src/auth/Schema/Auth.schema';
+import { TicketsModule } from '../tickets/tickets.module';
+import { TransactionGateway } from './trasaction.gateway';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Transaction.name, schema: TransactionSchema },
       { name: Tickets.name, schema: TicketsSchema },
-      // { name: 'Payments', schema: PaymentsSchema },
+      { name: "Auth", schema: AuthSchema },
+      { name: Payments.name, schema: PaymentsSchema },
     ]),
     BullModule.registerQueue({
       name: 'transactions',
@@ -25,10 +29,11 @@ import { PaymentsSchema } from '../payment/schema/payment.schema';
     StripeModule,
     AuthModule,
     ConfigModule,
-    forwardRef(() => PaymentModule), // Use forwardRef here
+    forwardRef(() => PaymentModule),
+    forwardRef(() => TicketsModule), 
   ],
   controllers: [TransactionController],
-  providers: [TransactionService],
-  exports: [TransactionService, MongooseModule], // Export MongooseModule to share models
+  providers: [TransactionService , TransactionGateway],
+  exports: [TransactionService, MongooseModule], 
 })
 export class TransactionModule { }

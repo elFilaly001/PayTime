@@ -7,8 +7,8 @@ const useTicketSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const socketRef = useRef(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Get auth token from localStorage
   const getAuthToken = useCallback(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
@@ -16,6 +16,47 @@ const useTicketSocket = () => {
       return null;
     }
     return token;
+  }, []);
+
+  // Function to refresh the token
+  const refreshToken = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_BACK_APP_URL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+
+      const data = await response.json();
+
+      // Store the new tokens
+      localStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
+
+      console.log('Token refreshed successfully');
+      return data.accessToken;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      setTokenError('Failed to refresh authentication token');
+      return null;
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
   // Initialize socket connection - restored to working version with improvements
@@ -35,7 +76,7 @@ const useTicketSocket = () => {
       console.log(`Socket connected with ID: ${socket.id}`);
       setIsConnected(true);
       setTokenError(null);
-      
+
       // Register the user with their ID 
       socket.emit('register', user._id);
       console.log(`Sent registration for user ${user._id}`);
@@ -54,9 +95,24 @@ const useTicketSocket = () => {
       }
     });
 
-    socket.on('unauthorized', (error) => {
+    socket.on('unauthorized', async (error) => {
       console.error('Authentication error:', error.message);
       setTokenError(error.message || 'Unauthorized: Invalid token');
+
+      // If token is invalid/expired, try to refresh it
+      if (error.message && (
+        error.message.includes('invalid') ||
+        error.message.includes('expired') ||
+        error.message.includes('jwt')
+      )) {
+        console.log('Attempting to refresh token...');
+        const newToken = await refreshToken();
+        if (newToken) {
+          console.log('Reconnecting with new token...');
+          socket.disconnect();
+          initializeSocket(newToken);
+        }
+      }
     });
 
     // Add a handler for reconnection attempts
@@ -83,11 +139,16 @@ const useTicketSocket = () => {
 
     socketRef.current = socket;
     return socket;
-  }, [user?._id]);
+  }, [user?._id, refreshToken]);
 
   // Reconnect socket with a new token
-  const reconnectWithToken = useCallback(() => {
-    const token = getAuthToken();
+  const reconnectWithToken = useCallback(async (forceRefresh = false) => {
+    let token = getAuthToken();
+
+    if (forceRefresh || !token) {
+      token = await refreshToken();
+    }
+
     if (!token || !user?._id) return false;
 
     if (socketRef.current) {
@@ -96,14 +157,14 @@ const useTicketSocket = () => {
 
     initializeSocket(token);
     return true;
-  }, [user?._id, getAuthToken, initializeSocket]);
+  }, [user?._id, getAuthToken, initializeSocket, refreshToken]);
 
   // Initialize socket on component mount
   useEffect(() => {
     const token = getAuthToken();
     if (token && user?._id) {
       const socket = initializeSocket(token);
-      
+
       return () => {
         if (socket) socket.disconnect();
       };
@@ -139,6 +200,8 @@ const useTicketSocket = () => {
     createTicket,
     tokenError,
     reconnectWithToken,
+    refreshToken,
+    isRefreshing,
   };
 };
 

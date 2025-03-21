@@ -2,23 +2,23 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
-const Tickets = ({ ticket }) => {
+const Tickets = ({ ticket, onSubmit }) => {
   const user = useSelector((state) => state.user);
-  
+
   // Determine status styling
   const getStatusStyles = (status) => {
     switch (status) {
       case 'PENDING':
         return 'bg-amber-100 text-amber-800';
-      case 'COMPLETED':
+      case 'PAID':
         return 'bg-green-100 text-green-800';
-      case 'REJECTED':
+      case 'OVERDUE':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
-  
+
   // Determine transaction message based on current user
   const getTransactionMessage = () => {
     if (user && ticket) {
@@ -35,27 +35,100 @@ const Tickets = ({ ticket }) => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
   };
 
-  // Render action buttons based on status
+  // Add this updated renderActionButtons function
   const renderActionButtons = () => {
-    if (!ticket || user?._id !== ticket.loanee) return null;
-    
-    switch (ticket.status) {
-      case 'PENDING':
+    // First check if user is the loanee (the person who needs to pay)
+    const isLoanee = user && ticket && user._id === ticket.loanee;
+
+    // If user is not the loanee, they don't need to see payment buttons
+    if (!isLoanee) {
+      if (ticket.status === 'PAYED') {
         return (
-          <button className="w-full mt-4 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors font-medium">
-            Mark as Paid
-          </button>
+          <div className="w-full mt-4 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm text-center">
+            Payment Completed
+          </div>
         );
-      default:
-        return null;
+      } else {
+        return (
+          <div className="w-full mt-4 px-3 py-2 bg-gray-100 text-gray-800 rounded-md text-sm text-center">
+            Awaiting Payment
+          </div>
+        );
+      }
     }
+
+    // For the loanee (person who needs to pay)
+    if (ticket.status === 'PAYED') {
+      return (
+        <div className="w-full mt-4 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm text-center">
+          Payment Completed
+        </div>
+      );
+    }
+
+    if (ticket.status === 'PENDING' || ticket.status === 'OVERDUE') {
+      const handleCashClick = () => {
+        console.log(`Initiating CASH payment for ticket: ${ticket._id}`);
+        onSubmit(ticket._id, 'CASH');
+      };
+
+      const handleCardClick = () => {
+        console.log(`Initiating CARD payment for ticket: ${ticket._id}`);
+        onSubmit(ticket._id, 'CARD');
+      };
+
+      // Check ticket type to determine payment options
+      if (ticket.Type === 'CASH') {
+        return (
+          <div className="mt-4">
+            <button
+              onClick={handleCashClick}
+              className="w-full py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 transition-colors font-medium"
+            >
+              Pay with Cash
+            </button>
+          </div>
+        );
+      } else if (ticket.Type === 'MANUAL_CARD') {
+        return (
+          <div className="mt-4">
+            <button
+              onClick={handleCardClick}
+              className="w-full py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors font-medium"
+            >
+              Pay with Card
+            </button>
+          </div>
+        );
+      } else {
+        // If ticket type is something else or unspecified, show both options
+        return (
+          <div className="flex flex-col gap-2 mt-4">
+            <button
+              onClick={handleCardClick}
+              className="w-full py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors font-medium"
+            >
+              Pay with Card
+            </button>
+            <button
+              onClick={handleCashClick}
+              className="w-full py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 transition-colors font-medium"
+            >
+              Pay with Cash
+            </button>
+          </div>
+        );
+      }
+    }
+
+    return null;
   };
 
   // Handle missing ticket data
@@ -79,13 +152,13 @@ const Tickets = ({ ticket }) => {
             {ticket.status || 'N/A'}
           </span>
         </div>
-        
+
         {/* Simplified transaction message */}
         <div className="mb-4">
           <div className="text-center py-3">
             <p className="font-medium text-gray-800">{getTransactionMessage()}</p>
           </div>
-          
+
           <div className="flex justify-center">
             <div className="text-center py-2 px-4 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-500">Amount</span>
@@ -93,7 +166,7 @@ const Tickets = ({ ticket }) => {
             </div>
           </div>
         </div>
-        
+
         {/* Footer with date and location */}
         <div className="pt-3 border-t border-gray-100 text-sm text-gray-600 flex justify-between">
           <div className="flex items-center">
@@ -110,8 +183,7 @@ const Tickets = ({ ticket }) => {
             <span>{ticket.Place || 'N/A'}</span>
           </div>
         </div>
-        
-        {/* Action buttons - moved to bottom of card */}
+
         {renderActionButtons()}
       </div>
     </div>
@@ -130,7 +202,8 @@ Tickets.propTypes = {
     loaneeName: PropTypes.string,
     createdAt: PropTypes.string,
     Place: PropTypes.string
-  })
+  }),
+  onSubmit: PropTypes.func.isRequired
 };
 
 export default Tickets;
