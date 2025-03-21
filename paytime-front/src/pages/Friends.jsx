@@ -10,18 +10,32 @@ import { toast, Toaster } from "react-hot-toast";
 import { UserPlus, RefreshCw, Search } from "lucide-react";
 import { setUser } from "../store/Slices/UserSlice";
 import FriendList from "../components/Cards/FriendList";
+import CreateTicketModal from '../components/Modals/CreateTicketModal';
 
 export default function FriendsPage() {
     const user = useSelector((state) => state.user);
     const dispatch = useDispatch();
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
+    const [ticketModalOpen, setTicketModalOpen] = useState(false);
+    const [selectedFriend, setSelectedFriend] = useState(null);
+    const [friends, setFriends] = useState(null);
     
     // Only initialize socket connection if we have a valid user ID
     const { isConnected, isRegistered, sendFriendRequest } = useSocketIO(
         user._id ? user._id : null
     );
 
+
+     // Initial data loading
+     useEffect(() => {
+        if (user?.Friend_list && Array.isArray(user.Friend_list)) {
+            setFriends(user.Friend_list);
+            console.log("Friends set from user state:", user.Friend_list);
+        } else {
+            console.log("No Friend_list in user state or it's not an array");
+        }
+    }, [user]);
     // Memoize the handleAddFriend function to avoid recreating it on every render
     const handleAddFriend = useCallback(async (friendId) => {
         try {
@@ -108,6 +122,24 @@ export default function FriendsPage() {
         }
     };
 
+    const handleOpenTicketModal = (friend) => {
+        setSelectedFriend(friend);
+        setTicketModalOpen(true);
+    };
+    
+    const handleSubmitTicket = async (ticketData) => {
+        try {
+            const response = await axiosInstance.post('/tickets/create', ticketData);
+            if (response.data) {
+                toast.success("Ticket created successfully!");
+                setTicketModalOpen(false);
+            }
+        } catch (error) {
+            console.error("Error creating ticket:", error);
+            toast.error(error.response?.data?.message || "Failed to create ticket");
+        }
+    };
+
     return (
         <div className="flex flex-col min-h-screen">
             <Toaster />
@@ -190,6 +222,8 @@ export default function FriendsPage() {
                                         <FriendList
                                             key={friend._id}
                                             username={friend.Username}
+                                            friendId={friend._id}
+                                            onOpenTicketModal={handleOpenTicketModal}
                                         />
                                     ))
                                 ) : (
@@ -200,6 +234,15 @@ export default function FriendsPage() {
                     </div>
                 </main>
             </div>
+            {ticketModalOpen && (
+                <CreateTicketModal
+                    isOpen={ticketModalOpen}
+                    onClose={() => setTicketModalOpen(false)}
+                    onSubmit={handleSubmitTicket}
+                    Friend_list={friends || user.Friend_list} 
+                    preselectedFriendId={selectedFriend?._id}
+                />
+            )}
         </div>
     );
 }

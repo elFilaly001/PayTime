@@ -49,7 +49,7 @@ const Tickets = ({ ticket, onSubmit }) => {
 
     // If user is not the loanee, they don't need to see payment buttons
     if (!isLoanee) {
-      if (ticket.status === 'PAYED') {
+      if (ticket.status === 'PAYED' || ticket.status === 'PAID') {
         return (
           <div className="w-full mt-4 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm text-center">
             Payment Completed
@@ -65,7 +65,7 @@ const Tickets = ({ ticket, onSubmit }) => {
     }
 
     // For the loanee (person who needs to pay)
-    if (ticket.status === 'PAYED') {
+    if (ticket.status === 'PAYED' || ticket.status === 'PAID') {
       return (
         <div className="w-full mt-4 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm text-center">
           Payment Completed
@@ -108,22 +108,12 @@ const Tickets = ({ ticket, onSubmit }) => {
           </div>
         );
       } else {
-        // If ticket type is something else or unspecified, show both options
+       
         return (
-          <div className="flex flex-col gap-2 mt-4">
-            <button
-              onClick={handleCardClick}
-              className="w-full py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors font-medium"
-            >
-              Pay with Card
-            </button>
-            <button
-              onClick={handleCashClick}
-              className="w-full py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 transition-colors font-medium"
-            >
-              Pay with Cash
-            </button>
-          </div>
+          
+            <div className="w-full mt-4 px-3 py-2 bg-gray-100 text-gray-800 rounded-md text-sm text-center">
+              Awaiting Payment
+            </div>
         );
       }
     }

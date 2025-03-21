@@ -25,7 +25,7 @@ export class Tickets {
     @Prop({ required: true , enum: ["CASH", "MANUAL_CARD" , "AUTO_CARD"]})
     Type: string
 
-    @Prop({ required: true, enum: ['PENDING', 'PAYED', 'FAILED' , "OVERDUE"] , default : "PENDING"})
+    @Prop({ required: true, enum: ['PENDING', 'PAID', 'FAILED' , "OVERDUE"] , default : "PENDING"})
     status: string;
 
     @Prop({ required: true })

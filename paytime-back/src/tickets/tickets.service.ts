@@ -207,9 +207,9 @@ export class TicketsService implements OnModuleInit {
           );
       
           if (newTransaction) {
-            // Update ticket to PAID status
+            
             const updateData = { 
-              status: 'PAID', // Consistent naming
+              status: 'PAID', 
               updatedAt: new Date(),
               paidAt: new Date(),
               paymentId: newTransaction.paymentId
