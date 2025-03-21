@@ -4,19 +4,17 @@ import { io } from "socket.io-client";
 import { addFriendRequest, addFriend, removeFriendRequest } from "../store/Slices/UserSlice";
 import { toast } from "react-hot-toast";
 
-// Enable this for more detailed logs
 const DEBUG = true;
 
 const useSocketIO = (userId) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
-  const [socket, setSocket] = useState(null);
   const [connectionError, setConnectionError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const dispatch = useDispatch();
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
-  
+  const socketRef = useRef(null);
   
   const debug = (message, data) => {
     if (DEBUG) {
@@ -47,257 +45,140 @@ const useSocketIO = (userId) => {
       }
       
       const data = await response.json();
-      
-      // Store the new tokens
-      localStorage.setItem('token', data.accessToken);
-      if (data.refreshToken) {
-        localStorage.setItem('refreshToken', data.refreshToken);
-      }
-      
+      localStorage.setItem('token', data.token);
       debug('Token refreshed successfully');
-      return data.accessToken;
+      return data.token;
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      setConnectionError('Failed to refresh authentication token');
-      return null;
+      debug('Token refresh failed', error);
+      throw error;
     } finally {
       setIsRefreshing(false);
     }
   }, []);
-  
-  // Function to reconnect with a new token
-  const reconnectWithNewToken = useCallback(async () => {
-    const newToken = await refreshToken();
-    if (!newToken || !userId) {
-      debug('Failed to reconnect - no new token or userId');
-      return false;
-    }
-    
-    debug('Reconnecting with new token');
-    
-    // Clean up existing socket if any
-    if (socket) {
-      socket.disconnect();
-    }
-    
-    // Create new socket with fresh token
-    const socketInstance = io(`${import.meta.env.VITE_BACK_APP_URL}/friends`, {
-      auth: { userId, token: newToken },
-      reconnection: true,
-      reconnectionAttempts: maxReconnectAttempts,
-      reconnectionDelay: 1000,
-      timeout: 10000,
-      transports: ['websocket', 'polling'],
-    });
-    
-    setSocket(socketInstance);
-    
-    // Set up the event listeners again
-    socketInstance.on("connect", () => {
-      debug(`Reconnected to WebSocket: ${socketInstance.id}`);
-      setIsConnected(true);
-      setConnectionError(null);
-      socketInstance.emit("register", userId);
-    });
-    
-    // Set up all the other event listeners...
-    // (adding just key ones to avoid too much repetition)
-    socketInstance.on("registered", (response) => {
-      debug('Registration confirmed by server', response);
-      setIsRegistered(true);
-    });
-    
-    socketInstance.on("unauthorized", async (error) => {
-      debug('Unauthorized error from server', error);
-      // If we get another unauthorized after refresh, don't loop
-      if (!isRefreshing) {
-        await reconnectWithNewToken();
-      }
-    });
-    
-    return true;
-  }, [userId, socket, refreshToken, isRefreshing, maxReconnectAttempts]);
-  
+
+  // Initialize the socket only once when userId is available and changes
   useEffect(() => {
-    debug(`Hook initialized with userId: ${userId}`);
+    // Don't connect if there's no userId
     if (!userId) {
-      debug('No userId provided, skipping socket connection');
+      debug('No userId provided, not connecting');
       return;
     }
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setConnectionError('No authentication token found');
-      return;
+    // Clean up any existing connection
+    if (socketRef.current) {
+      debug('Cleaning up existing socket before creating new one');
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
+
+    debug(`Initializing socket for user: ${userId}`);
     
-    const socketInstance = io(`${import.meta.env.VITE_BACK_APP_URL}/friends`, {
-      auth: { userId, token },
+    // Create a new socket connection
+    const newSocket = io(import.meta.env.VITE_BACK_APP_URL, {
+      transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: maxReconnectAttempts,
       reconnectionDelay: 1000,
-      timeout: 10000,
-      transports: ['websocket', 'polling'],
+      query: { 
+        token: localStorage.getItem('token') 
+      }
     });
-
-    socketInstance.on("connect", () => {
-      debug(`Connected to WebSocket: ${socketInstance.id}`);
+    
+    socketRef.current = newSocket;
+    
+    // Set up event handlers
+    newSocket.on('connect', () => {
+      debug('Connected to socket server');
       setIsConnected(true);
-      setConnectionError(null);
       reconnectAttempts.current = 0;
+      setConnectionError(null);
       
-      // Explicitly register with the server and wait for confirmation
-      debug(`Sending registration for userId: ${userId}`);
-      socketInstance.emit("register", userId);
+      // Register with socket server
+      newSocket.emit('register', { userId }, (response) => {
+        if (response.success) {
+          setIsRegistered(true);
+          debug('Successfully registered with socket server');
+        } else {
+          debug('Failed to register with socket server', response);
+          setIsRegistered(false);
+        }
+      });
     });
-
-    // Listen for registration confirmation
-    socketInstance.on("registered", (response) => {
-      debug('Registration confirmed by server', response);
-      setIsRegistered(true);
-      // toast.success("Connected to real-time notifications");
-    });
-
-    socketInstance.on("connect_error", async (error) => {
-      console.error("Socket connection error:", error.message);
-      reconnectAttempts.current += 1;
+    
+    newSocket.on('disconnect', (reason) => {
+      debug(`Disconnected: ${reason}`);
       setIsConnected(false);
       setIsRegistered(false);
-      setConnectionError(`Connection failed: ${error.message}`);
+    });
+    
+    newSocket.on('connect_error', async (err) => {
+      debug('Connection error', err);
+      setConnectionError(err.message);
       
-      // Check if the error is related to authentication
-      if (error.message.includes('auth') || error.message.includes('token') || 
-          error.message.includes('unauthorized') || error.message.includes('jwt')) {
-        debug('Connection error appears to be auth-related, trying to refresh token');
-        await reconnectWithNewToken();
-      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
-        toast.error("Unable to connect to the server. Please check your connection and try again later.");
-        socketInstance.disconnect();
+      if (err.message.includes('authentication') && reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current += 1;
+        debug(`Reconnect attempt ${reconnectAttempts.current}/${maxReconnectAttempts}`);
+        
+        try {
+          const newToken = await refreshToken();
+          if (newToken) {
+            newSocket.io.opts.query = { token: newToken };
+            newSocket.connect();
+          }
+        } catch (error) {
+          debug('Failed to recover connection', error);
+        }
       }
     });
-
-    socketInstance.on("disconnect", (reason) => {
-      debug(`Disconnected from WebSocket: ${reason}`);
-      setIsConnected(false);
-      setIsRegistered(false);
-      if (reason === "io server disconnect") {
-        setConnectionError("Disconnected by server");
-        toast.error("Disconnected from server. Please refresh the page.");
-      }
+    
+    // Handle incoming friend requests
+    newSocket.on('friend_request', (data) => {
+      debug('Received friend request event', data);
+      toast.success(`New friend request from ${data.from.Username}`);
+      dispatch(addFriendRequest(data));
     });
-
-    // Add specific handler for friend requests
-    socketInstance.on("newFriendRequest", (data) => {
-      debug('Received new friend request', data);
-      
-      if (!data.fromUserId) {
-        console.error('Invalid friend request data received', data);
-        return;
-      }
-      
-      // Add to Redux store
-      dispatch(addFriendRequest({
-        _id: data.fromUserId,
-        from: data.fromUserId,
-        Username: data.fromUsername || "Unknown User"
-      }));
-      
-      // Show notification
-      toast.success(`New friend request from ${data.fromUsername}`);
-    });
-
-    socketInstance.on("friendRequestAccepted", (data) => {
+    
+    // Handle accepted friend requests
+    newSocket.on('friend_accepted', (data) => {
       debug('Friend request accepted', data);
-      if (data.friend) {
-        dispatch(removeFriendRequest(data.friend));
-        dispatch(addFriend({
-          _id: data.friend,
-          Username: data.fromUsername
-        }));
-        toast.success("Friend request accepted!");
-      }
+      toast.success(`${data.Username} accepted your friend request!`);
+      dispatch(addFriend(data));
     });
-
-    socketInstance.on("friendRequestRejected", (data) => {
+    
+    // Handle rejected friend requests
+    newSocket.on('friend_rejected', (data) => {
       debug('Friend request rejected', data);
-      if (data.fromUserId) {
-        dispatch(removeFriendRequest(data.fromUserId));
-        toast.info("Friend request was rejected");
-      }
+      toast.error(`${data.Username} rejected your friend request`);
+      dispatch(removeFriendRequest(data.requestId));
     });
-
-    // Add specific handler for unauthorized responses
-    socketInstance.on("unauthorized", async (error) => {
-      debug('Unauthorized error received', error);
-      if (!isRefreshing) {
-        await reconnectWithNewToken();
-      }
-    });
-
-    setSocket(socketInstance);
-
+    
+    // Clean up the socket connection when the component unmounts or userId changes
     return () => {
       debug('Cleaning up socket connection');
-      if (socketInstance) {
-        socketInstance.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
-  }, [userId, reconnectWithNewToken, isRefreshing, maxReconnectAttempts]);
-  
+  }, [userId, dispatch, refreshToken]);
+
+  // Send friend request via socket
   const sendFriendRequest = useCallback((toUserId) => {
-    if (!socket || !isConnected) {
-      debug('Cannot send friend request - socket not connected');
+    if (!socketRef.current || !isConnected || !isRegistered) {
+      debug('Cannot send friend request: socket not ready');
       return false;
     }
     
     debug(`Sending friend request to ${toUserId}`);
-    socket.emit("sendFriendRequest", {
-      fromUserId: userId,
-      toUserId
-    });
-    
+    socketRef.current.emit('friend_request', { toUserId });
     return true;
-  }, [socket, isConnected, userId]);
-  
-  const acceptFriendRequest = (fromUserId) => {
-    if (!socket || !isConnected) {
-      debug('Cannot accept friend request - socket not connected');
-      return false;
-    }
-    
-    debug(`Accepting friend request from ${fromUserId}`);
-    socket.emit("acceptFriendRequest", {
-      fromUserId,
-      toUserId: userId
-    });
-    
-    return true;
-  };
-  
-  const rejectFriendRequest = (fromUserId) => {
-    if (!socket || !isConnected) {
-      debug('Cannot reject friend request - socket not connected');
-      return false;
-    }
-    
-    debug(`Rejecting friend request from ${fromUserId}`);
-    socket.emit("rejectFriendRequest", {
-      fromUserId,
-      toUserId: userId
-    });
-    
-    return true;
-  };
-  
+  }, [isConnected, isRegistered]);
+
   return {
     isConnected,
     isRegistered,
     connectionError,
-    sendFriendRequest,
-    acceptFriendRequest,
-    rejectFriendRequest,
-    refreshToken,
-    isRefreshing
+    sendFriendRequest
   };
 };
 

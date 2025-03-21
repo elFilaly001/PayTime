@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import NavBar from "../components/Bars/NavBar";
 import SideBar from "../components/Bars/Sidebar";
@@ -13,23 +13,18 @@ import FriendList from "../components/Cards/FriendList";
 
 export default function FriendsPage() {
     const user = useSelector((state) => state.user);
-    const { isConnected, isRegistered, sendFriendRequest } = useSocketIO(user._id);
+    const dispatch = useDispatch();
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
-    const dispatch = useDispatch();
+    
+    // Only initialize socket connection if we have a valid user ID
+    const { isConnected, isRegistered, sendFriendRequest } = useSocketIO(
+        user._id ? user._id : null
+    );
 
-    useEffect(() => {
-        console.log("Current user ID:", user._id);
-        console.log("Socket connection status:", isConnected);
-        console.log("Socket registration status:", isRegistered);
-        console.log("Friend requests:", user);
-    }, [user._id, isConnected, isRegistered]);
-
-    const Friend_requests = user.Friend_requests || [];
-
-    const handleAddFriend = async (friendId) => {
+    // Memoize the handleAddFriend function to avoid recreating it on every render
+    const handleAddFriend = useCallback(async (friendId) => {
         try {
-            
             if (!user._id || !friendId) {
                 toast.error("Missing user information");
                 return;
@@ -58,7 +53,21 @@ export default function FriendsPage() {
             console.error("Error details:", error.response?.data || error);
             toast.error(error.response?.data?.message || "Failed to send friend request");
         }
-    };
+    }, [user._id, isConnected, isRegistered, sendFriendRequest]);
+
+    // Only log socket connection status when it changes
+    useEffect(() => {
+        console.log("Socket connection status:", isConnected);
+        console.log("Socket registration status:", isRegistered);
+    }, [isConnected, isRegistered]);
+
+    // Log user info separately
+    useEffect(() => {
+        console.log("Current user ID:", user._id);
+        console.log("Friend requests:", user);
+    }, [user]);
+
+    const Friend_requests = user.Friend_requests || [];
 
     const handleSearch = async () => {
         try {
