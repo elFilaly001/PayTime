@@ -1,4 +1,5 @@
 name: paytime
+
 services:
   web:
     container_name: paytime-front
@@ -6,15 +7,18 @@ services:
       context: ./paytime-front
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - "172.27.160.1:5173:5173"
     networks:
       - frontend-network
     volumes:
-      - ./paytime-front:/app:delegated
+      - ./paytime-front:/app
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
+      - VITE_API_URL=http://localhost:5173
+      - VITE_STRIPE_PUBLISHABLE_KEY= ${VITE_STRIPE_PUBLISHABLE_KEY}
+      - VITE_BACK_APP_URL=${VITE_BACK_APP_URL}
     depends_on:
       - api
 
@@ -24,17 +28,46 @@ services:
       context: ./paytime-back
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "172.27.160.1:3000:3000"
     environment:
-      - MONGO_URI=mongodb+srv://elfilalyabdeljalil:jGq8BeJbQEB3g6rL@cluster0.yn0nm.mongodb.net/Paytime?retryWrites=true&w=majority&appName=Cluster0
+      - MONGO_URI=${MONGO_URI}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_SECURE=${SMTP_SECURE}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
+      - APP_URL=${APP_URL}
+      - JWT_REFRESH_TIME=${JWT_REFRESH_TIME}
+      - JWT_ACCESS_TIME=${JWT_ACCESS_TIME}
+      - JWT_RESET_PASSWORD_TIME=${JWT_RESET_PASSWORD_TIME}
+      - JWT_EMAIL_VERIFICATION_TIME=${JWT_EMAIL_VERIFICATION_TIME}
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      
     volumes:
       - ./paytime-back:/app:delegated
       - /app/node_modules
     networks:
       - backend-network
       - frontend-network
+    depends_on:
+      - redis
+
+  redis:
+    container_name: paytime-redis
+    image: redis:latest
+    ports:
+      - "172.27.160.1:6379:6379" 
+    networks:
+      - backend-network
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
 
 networks:
   frontend-network:
@@ -43,3 +76,6 @@ networks:
   backend-network:
     name: backend-network
     driver: bridge
+
+volumes:
+  redis_data:
