@@ -153,7 +153,7 @@ export default function HomePage() {
             setTickets(prevTickets => {
                 return prevTickets.map(ticket =>
                     ticket._id === transaction.ticketId
-                        ? { ...ticket, status: 'PAYED' }
+                        ? { ...ticket, status: 'PAID' }
                         : ticket
                 );
             });
@@ -215,7 +215,7 @@ export default function HomePage() {
             setTickets(prevTickets =>
                 prevTickets.map(ticket =>
                     ticket._id === ticketId
-                        ? { ...ticket, status: 'PAYED' }
+                        ? { ...ticket, status: 'PAID' }
                         : ticket
                 )
             );
@@ -248,10 +248,6 @@ export default function HomePage() {
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-2">
                                     <h1 className="text-3xl font-bold text-gray-900">Tickets</h1>
-                                    <div
-                                        className={`w-3 h-3 rounded-full ${allSocketsConnected ? 'bg-green-500' : 'bg-red-500'}`}
-                                        title={allSocketsConnected ? 'Sockets Connected' : 'Socket Disconnected'}
-                                    />
                                 </div>
                                 <div className="flex gap-2">
                                     <button
@@ -274,7 +270,7 @@ export default function HomePage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 flex flex-row flex-wrap gap-4 rounded-lg shadow">
+                            <div className="bg-white p-6 flex flex-row flex-wrap justify-center gap-4 rounded-lg shadow">
                                 {tickets.length > 0 ? (
                                     tickets.map((ticket) => (
                                         <Tickets

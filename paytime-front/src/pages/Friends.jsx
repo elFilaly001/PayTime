@@ -20,15 +20,15 @@ export default function FriendsPage() {
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [friends, setFriends] = useState(null);
-    
+
     // Only initialize socket connection if we have a valid user ID
     const { isConnected, isRegistered, sendFriendRequest } = useSocketIO(
         user._id ? user._id : null
     );
 
 
-     // Initial data loading
-     useEffect(() => {
+    // Initial data loading
+    useEffect(() => {
         if (user?.Friend_list && Array.isArray(user.Friend_list)) {
             setFriends(user.Friend_list);
             console.log("Friends set from user state:", user.Friend_list);
@@ -110,7 +110,7 @@ export default function FriendsPage() {
                 // More flexible handling of the response format
                 const friendRequests = response.data.requests || [];
 
-                dispatch(setUser({ Friend_requests: friendRequests }));
+                dispatch(setUser({ Friend_requests: friendRequests , Friend_list: user.Friend_list}));
                 toast.success(`Friend requests refreshed (${friendRequests.length} found)`);
             } else {
                 toast.error("No data received from server");
@@ -126,7 +126,7 @@ export default function FriendsPage() {
         setSelectedFriend(friend);
         setTicketModalOpen(true);
     };
-    
+
     const handleSubmitTicket = async (ticketData) => {
         try {
             const response = await axiosInstance.post('/tickets/create', ticketData);
@@ -239,7 +239,7 @@ export default function FriendsPage() {
                     isOpen={ticketModalOpen}
                     onClose={() => setTicketModalOpen(false)}
                     onSubmit={handleSubmitTicket}
-                    Friend_list={friends || user.Friend_list} 
+                    Friend_list={friends || user.Friend_list}
                     preselectedFriendId={selectedFriend?._id}
                 />
             )}

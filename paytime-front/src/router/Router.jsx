@@ -6,18 +6,7 @@ import HomePage from '../pages/Home'
 import Settings from '../pages/Settings'
 import Friends from '../pages/Friends'
 import ProtectedRoute from './ProtectedRoute'
-
-// Public route that redirects authenticated users
-const PublicRoute = ({ children }) => {
-  const isAuthenticated = localStorage.getItem('accessToken');
-  
-  // If user is already logged in, redirect to home page
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-  
-  return children;
-};
+import History from '../pages/History'
 
 export default function Router() {
   return (
@@ -48,24 +37,29 @@ export default function Router() {
             </ProtectedRoute>
           }
         />
+        <Route 
+          path='/history' 
+          element={
+            <ProtectedRoute>
+              <History />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Public Routes */}
         <Route 
           path="/login" 
           element={
-            <PublicRoute>
               <Login />
-            </PublicRoute>
           } 
         />
         <Route 
           path="/register" 
           element={
-            <PublicRoute>
               <Register />
-            </PublicRoute>
           } 
         />
+
         <Route path="/otp" element={<OTP />} />
         
         {/* Catch all - redirect to home or login */}
