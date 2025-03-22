@@ -12,7 +12,7 @@ import { Logger } from '@nestjs/common';
 import { OTPHelper } from '../Helpers/OTP.helper';
 import { RedisService } from '../redis/redis.service';
 import { getDeviceInfo, isDeviceRecognized } from '../Helpers/Device.helper';
-import { StripeService } from 'src/stripe/stripe.service';
+import { StripeService } from '../stripe/stripe.service';
 import { Redis } from 'ioredis';
 import Stripe from 'stripe';
 

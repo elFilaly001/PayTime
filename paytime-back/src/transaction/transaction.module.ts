@@ -11,9 +11,9 @@ import { StripeModule } from '../stripe/stripe.module';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { Payments, PaymentsSchema } from '../payment/schema/payment.schema';
-import { Auth , AuthSchema } from 'src/auth/Schema/Auth.schema';
+import { Auth, AuthSchema } from 'src/auth/Schema/Auth.schema';
 import { TicketsModule } from '../tickets/tickets.module';
-import { TransactionGateway } from './trasaction.gateway';
+import { TransactionGateway } from './transaction.gateway';
 
 @Module({
   imports: [
@@ -30,10 +30,10 @@ import { TransactionGateway } from './trasaction.gateway';
     AuthModule,
     ConfigModule,
     forwardRef(() => PaymentModule),
-    forwardRef(() => TicketsModule), 
+    forwardRef(() => TicketsModule),
   ],
   controllers: [TransactionController],
-  providers: [TransactionService , TransactionGateway],
-  exports: [TransactionService, MongooseModule], 
+  providers: [TransactionService, TransactionGateway],
+  exports: [TransactionService, MongooseModule],
 })
 export class TransactionModule { }

@@ -1,46 +1,38 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { getModelToken } from '@nestjs/mongoose';
-import { JWTHelperService } from '../Helpers/JWT.helpers';
-import { ConfigService } from '@nestjs/config';
-import { MailHelper } from '../Helpers/Mail.helper';
-import { OTPHelper } from '../Helpers/OTP.helper';
-import { RedisService } from '../redis/redis.service';
 import { Response, Request } from 'express';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { RegisterDto, LoginDto, VerifyOtpDto, ResetPasswordEmailDto } from './dtos/Auth.dto';
+import * as DeviceHelper from '../Helpers/Device.helper';
+
+// Mock the stripe service
+jest.mock('../stripe/stripe.service', () => ({
+  StripeService: jest.fn().mockImplementation(() => ({
+    createCustomer: jest.fn().mockResolvedValue({ id: 'stripe-customer-id' }),
+  })),
+}));
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let authService: AuthService;
-
-  const mockResponse = {
-    cookie: jest.fn(),
-    clearCookie: jest.fn(),
-  } as unknown as Response;
-
-  const mockRequest = {
-    headers: {
-      'user-agent': 'test-agent',
-    },
-    cookies: {
-      refreshToken: 'test-refresh-token',
-    },
-  } as unknown as Request;
-
-  const mockAuthService = {
-    Register: jest.fn(),
-    Login: jest.fn(),
-    verifyOtp: jest.fn(),
-    Logout: jest.fn(),
-    RefreshToken: jest.fn(),
-    forgotPassword: jest.fn(),
-    resetPassword: jest.fn(),
-    changePassword: jest.fn(),
-    getUserInfo: jest.fn(),
-  };
+  let mockAuthService;
+  let mockRequest: Request;
+  let mockResponse: Response;
 
   beforeEach(async () => {
+    mockAuthService = {
+      Register: jest.fn(),
+      Login: jest.fn(),
+      RefreshToken: jest.fn(),
+      sendResetPasswordEmail: jest.fn(),
+      resetPassword: jest.fn(),
+      verifyOtp: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    mockRequest = {} as Request;
+    mockResponse = {} as Response;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
@@ -48,65 +40,43 @@ describe('AuthController', () => {
           provide: AuthService,
           useValue: mockAuthService,
         },
-        {
-          provide: getModelToken('Auth'),
-          useValue: {},
-        },
-        {
-          provide: JWTHelperService,
-          useValue: {},
-        },
-        {
-          provide: ConfigService,
-          useValue: {},
-        },
-        {
-          provide: MailHelper,
-          useValue: {},
-        },
-        {
-          provide: OTPHelper,
-          useValue: {},
-        },
-        {
-          provide: RedisService,
-          useValue: {},
-        },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('register', () => {
-    it('should register a new user successfully', async () => {
-      const registerDto = {
+  describe('Register', () => {
+    it('should register a new user', async () => {
+      const registerDto: RegisterDto = {
+        Username: 'testuser',
         Email: 'test@example.com',
         Password: 'password123',
         ConfirmPassword: 'password123',
-        FirstName: 'John',
-        LastName: 'Doe',
-        Username: 'johndoe',
         Region: 'US',
       };
-
-      const expectedResult = {
+      const expectedResult = { 
         User: {
-          Username: 'johndoe',
+          Username: 'testuser',
           Email: 'test@example.com',
+          Custumer: 'cus_123456789',
           Role: 'user',
           isVerified: false,
+          Friend_Code: '123456789',
+          Friend_list: [],
+          Friend_requests: []
         },
+        message: 'User created successfully'
       };
 
       mockAuthService.Register.mockResolvedValue(expectedResult);
 
       const result = await controller.Rgister(registerDto);
+
       expect(result).toEqual(expectedResult);
       expect(mockAuthService.Register).toHaveBeenCalledWith(registerDto);
     });
@@ -144,20 +114,20 @@ describe('AuthController', () => {
     });
   });
 
-  describe('login', () => {
-    it('should login successfully when OTP is not required', async () => {
-      const loginDto = {
+  describe('Login', () => {
+    it('should login a user', async () => {
+      const loginDto: LoginDto = {
         Email: 'test@example.com',
         Password: 'password123',
       };
-
-      const expectedResult = {
+      const expectedResult = { 
         User: {
           id: '123',
-          Username: 'johndoe',
+          Username: 'testuser',
+          Email: 'test@example.com'
         },
         Access: 'access-token',
-        requiresOTP: false,
+        requiresOTP: false
       };
 
       mockAuthService.Login.mockResolvedValue(expectedResult);
@@ -177,6 +147,7 @@ describe('AuthController', () => {
       const expectedResult = {
         requiresOTP: true,
         userId: '123',
+        message: 'OTP has been sent to your email'
       };
 
       mockAuthService.Login.mockResolvedValue(expectedResult);
@@ -184,22 +155,55 @@ describe('AuthController', () => {
       const result = await controller.Login(loginDto, mockResponse, mockRequest);
 
       expect(result).toEqual(expectedResult);
+      expect(mockAuthService.Login).toHaveBeenCalledWith(loginDto, mockResponse, mockRequest);
+    });
+
+    it('should throw UnauthorizedException when user is banned', async () => {
+      const loginDto = {
+        Email: 'banned@example.com',
+        Password: 'password123',
+      };
+
+      mockAuthService.Login.mockRejectedValue(
+        new UnauthorizedException('This account has been banned')
+      );
+
+      await expect(controller.Login(loginDto, mockResponse, mockRequest))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+      const loginDto = { Email: 'nonexistent@example.com', Password: 'password123' };
+      mockAuthService.Login.mockRejectedValue(new NotFoundException('User not found'));
+      await expect(controller.Login(loginDto, mockResponse, mockRequest)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw UnauthorizedException when user is deleted', async () => {
+      const loginDto = { Email: 'deleted@example.com', Password: 'password123' };
+      mockAuthService.Login.mockRejectedValue(new UnauthorizedException('This account has been deleted.'));
+      await expect(controller.Login(loginDto, mockResponse, mockRequest)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw BadRequestException when password is invalid', async () => {
+      const loginDto = { Email: 'test@example.com', Password: 'wrongpassword' };
+      mockAuthService.Login.mockRejectedValue(new BadRequestException('Invalid Password'));
+      await expect(controller.Login(loginDto, mockResponse, mockRequest)).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('verifyOtp', () => {
     it('should verify OTP successfully', async () => {
-      const verifyOtpDto = {
+      const verifyOtpDto: VerifyOtpDto = {
         userId: '123',
         otp: '123456',
       };
-
-      const expectedResult = {
+      const expectedResult = { 
         User: {
           id: '123',
-          Username: 'johndoe',
+          Username: 'testuser',
+          Email: 'test@example.com'
         },
-        Access: 'access-token',
+        Access: 'access-token'
       };
 
       mockAuthService.verifyOtp.mockResolvedValue(expectedResult);
@@ -216,9 +220,16 @@ describe('AuthController', () => {
         otp: 'invalid',
       };
 
-      mockAuthService.verifyOtp.mockRejectedValue(new BadRequestException('Invalid OTP'));
+      mockAuthService.verifyOtp.mockRejectedValue(new UnauthorizedException('Invalid OTP'));
 
-      await expect(controller.verifyOtp(verifyOtpDto, mockResponse, mockRequest)).rejects.toThrow(BadRequestException);
+      await expect(controller.verifyOtp(verifyOtpDto, mockResponse, mockRequest))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw NotFoundException when user is not found', async () => {
+      const verifyOtpDto = { userId: 'nonexistent', otp: '123456' };
+      mockAuthService.verifyOtp.mockRejectedValue(new NotFoundException('User not found'));
+      await expect(controller.verifyOtp(verifyOtpDto, mockResponse, mockRequest)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -226,19 +237,20 @@ describe('AuthController', () => {
     it('should logout successfully', async () => {
       const expectedResult = { message: 'Logged out successfully' };
 
-      mockAuthService.Logout.mockResolvedValue(expectedResult);
+      mockAuthService.logout.mockResolvedValue(expectedResult);
 
       const result = await controller.logout(mockResponse);
 
       expect(result).toEqual(expectedResult);
-      expect(mockAuthService.Logout).toHaveBeenCalledWith(mockResponse);
+      expect(mockAuthService.logout).toHaveBeenCalledWith(mockResponse);
     });
   });
 
-  describe('refreshToken', () => {
-    it('should refresh token successfully', async () => {
-      const expectedResult = {
-        Access: 'new-access-token',
+  describe('RefreshToken', () => {
+    it('should refresh the token', async () => {
+      const expectedResult = { 
+        message: 'Token refreshed successfully',
+        Access: 'new-access-token'
       };
 
       mockAuthService.RefreshToken.mockResolvedValue(expectedResult);
@@ -248,89 +260,102 @@ describe('AuthController', () => {
       expect(result).toEqual(expectedResult);
       expect(mockAuthService.RefreshToken).toHaveBeenCalledWith(mockRequest, mockResponse);
     });
+
+    it('should throw UnauthorizedException when refresh token is invalid', async () => {
+      mockAuthService.RefreshToken.mockRejectedValue(
+        new UnauthorizedException('Invalid refresh token')
+      );
+
+      await expect(controller.RefreshToken(mockRequest, mockResponse))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when refresh token is missing', async () => {
+      mockAuthService.RefreshToken.mockRejectedValue(new UnauthorizedException('Refresh token not found'));
+      await expect(controller.RefreshToken(mockRequest, mockResponse)).rejects.toThrow(UnauthorizedException);
+    });
   });
 
-  describe('forgotPassword', () => {
+  describe('sendResetPasswordEmail', () => {
     it('should send password reset instructions', async () => {
-      const forgotPasswordDto = {
-        Email: 'test@example.com',
+      const resetPasswordEmailDto: ResetPasswordEmailDto = {
+        email: 'test@example.com',
       };
 
-      const expectedResult = { message: 'Reset instructions sent' };
+      const expectedResult = { 
+        message: 'Reset password email sent', 
+        token: 'reset-token'
+      };
 
-      mockAuthService.forgotPassword.mockResolvedValue(expectedResult);
+      mockAuthService.sendResetPasswordEmail.mockResolvedValue(expectedResult);
 
-      // Use PascalCase as that's what the controller uses
-      const result = await controller.ForgotPassword(forgotPasswordDto);
+      const result = await controller.sendResetPasswordEmail(resetPasswordEmailDto);
 
       expect(result).toEqual(expectedResult);
-      expect(mockAuthService.forgotPassword).toHaveBeenCalledWith(forgotPasswordDto);
+      expect(mockAuthService.sendResetPasswordEmail).toHaveBeenCalledWith(resetPasswordEmailDto.email);
+    });
+
+    it('should throw NotFoundException when user is not found', async () => {
+      const resetPasswordEmailDto = { email: 'nonexistent@example.com' };
+      mockAuthService.sendResetPasswordEmail.mockRejectedValue(new NotFoundException('User not found'));
+      await expect(controller.sendResetPasswordEmail(resetPasswordEmailDto)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('resetPassword', () => {
     it('should reset password successfully', async () => {
-      const resetPasswordDto = {
-        token: 'reset-token',
-        Password: 'newpassword',
-        ConfirmPassword: 'newpassword',
-      };
-
-      const expectedResult = { message: 'Password reset successfully' };
+      const token = 'reset-token';
+      const password = 'newpassword';
+      
+      const expectedResult = { message: 'Password reset successful' };
 
       mockAuthService.resetPassword.mockResolvedValue(expectedResult);
 
-      // Fix parameter handling to match controller expectations
-      const result = await controller.resetPassword(
-        resetPasswordDto.token, 
-        resetPasswordDto.Password  // Pass password as string, not as object
-      );
+      const result = await controller.resetPassword(token, password);
 
       expect(result).toEqual(expectedResult);
-      expect(mockAuthService.resetPassword).toHaveBeenCalledWith(resetPasswordDto);
+      expect(mockAuthService.resetPassword).toHaveBeenCalledWith(token, password);
+    });
+
+    it('should throw error when token is invalid', async () => {
+      const token = 'invalid-token';
+      const password = 'newpassword';
+      mockAuthService.resetPassword.mockRejectedValue(new Error('Invalid token'));
+      await expect(controller.resetPassword(token, password)).rejects.toThrow('Invalid token');
+    });
+
+    it('should throw NotFoundException when user is not found', async () => {
+      const token = 'valid-token';
+      const password = 'newpassword';
+      mockAuthService.resetPassword.mockRejectedValue(new NotFoundException('User not found'));
+      await expect(controller.resetPassword(token, password)).rejects.toThrow(NotFoundException);
     });
   });
 
-  describe('changePassword', () => {
-    it('should change password successfully', async () => {
-      const changePasswordDto = {
-        OldPassword: 'oldpassword',
-        NewPassword: 'newpassword',
-        ConfirmNewPassword: 'newpassword',
-      };
+  describe('getDeviceInfo', () => {
+    it('should return device info from request', () => {
+      const mockRequest = {
+        headers: {
+          'user-agent': 'Mozilla/5.0',
+          'accept-language': 'en-US',
+        },
+        ip: '127.0.0.1',
+      } as unknown as Request;
 
-      const mockUser = { id: '123' };
-      const expectedResult = { message: 'Password changed successfully' };
+      const deviceInfo = { 
+        engine: 'Blink',
+        cpu: 'amd64',
+        os: 'Windows',
+        browser: 'Chrome',
+        ip: '127.0.0.1'
+      } as const;
 
-      mockAuthService.changePassword.mockResolvedValue(expectedResult);
+      jest.spyOn(DeviceHelper, 'getDeviceInfo').mockReturnValue(deviceInfo);
 
-      // Use PascalCase as that's what the controller uses
-      const result = await controller.ChangePassword(changePasswordDto, mockUser);
+      const result = controller.getDeviceInfo(mockRequest);
 
-      expect(result).toEqual(expectedResult);
-      expect(mockAuthService.changePassword).toHaveBeenCalledWith(changePasswordDto, mockUser);
-    });
-  });
-
-  describe('getUserInfo', () => {
-    it('should return user info successfully', async () => {
-      const mockUser = {
-        id: '123',
-        Username: 'johndoe',
-        Email: 'test@example.com',
-      };
-
-      const expectedResult = {
-        User: mockUser
-      };
-
-      mockAuthService.getUserInfo.mockResolvedValue(expectedResult);
-
-      // Use PascalCase as that's what the controller uses
-      const result = await controller.GetUserInfo(mockUser);
-
-      expect(result).toEqual(expectedResult);
-      expect(mockAuthService.getUserInfo).toHaveBeenCalledWith(mockUser);
+      expect(result).toEqual(deviceInfo);
+      expect(DeviceHelper.getDeviceInfo).toHaveBeenCalledWith(mockRequest);
     });
   });
 });

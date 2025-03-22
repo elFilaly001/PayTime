@@ -31,4 +31,10 @@ export class TransactionController {
   async getTransaction(@Param('id') id: string) {
     return this.transactionService.getTransactionById(id);
   }
+
+  @Get()
+  @UseGuards(AuthGuard)
+  async getTransactions(@Request() req) {
+    return this.transactionService.getDetailedTransactionsByUser(req.user.id);
+  }
 }

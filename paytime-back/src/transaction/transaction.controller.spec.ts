@@ -2,17 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
 import { BadRequestException } from '@nestjs/common';
-import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { AuthGuard } from '../auth/auth.guard';
 
 describe('TransactionController', () => {
   let controller: TransactionController;
   let service: TransactionService;
 
   const mockTransactionService = {
-    createTransaction: jest.fn(),
-    createManualTransaction: jest.fn(),
-    scheduleAutomaticTransaction: jest.fn(),
-    createCashTransaction: jest.fn(),
+    payWithCash: jest.fn(),
+    payWithCard: jest.fn(),
+    getTransactionsByTicketId: jest.fn(),
+    getTransactionById: jest.fn(),
+    getDetailedTransactionsByUser: jest.fn()
+  };
+
+  const mockAuthGuard = {
+    canActivate: jest.fn(() => true)
   };
 
   beforeEach(async () => {
@@ -23,8 +28,15 @@ describe('TransactionController', () => {
           provide: TransactionService,
           useValue: mockTransactionService,
         },
+        {
+          provide: AuthGuard,
+          useValue: mockAuthGuard
+        }
       ],
-    }).compile();
+    })
+    .overrideGuard(AuthGuard)
+    .useValue(mockAuthGuard)
+    .compile();
 
     controller = module.get<TransactionController>(TransactionController);
     service = module.get<TransactionService>(TransactionService);
@@ -38,158 +50,189 @@ describe('TransactionController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('createTransaction', () => {
-    it('should call service.createTransaction with correct parameters', async () => {
-      const createTransactionDto = {} as CreateTransactionDto;
+  describe('payCash', () => {
+    it('should call service.payWithCash with correct parameters', async () => {
+      const ticketId = 'valid-ticket-id';
       const userId = 'user-id';
       const mockRequest = { user: { id: userId } };
-      const expectedResult = { id: 'transaction-id' };
+      const mockTransaction = { id: 'transaction-id' };
       
-      mockTransactionService.createTransaction.mockResolvedValue(expectedResult);
+      mockTransactionService.payWithCash.mockResolvedValue(mockTransaction);
       
-      const result = await controller.createTransaction(createTransactionDto, mockRequest);
+      const result = await controller.payCash(ticketId, mockRequest);
       
-      expect(service.createTransaction).toHaveBeenCalledWith(createTransactionDto, userId);
-      expect(result).toEqual(expectedResult);
+      expect(service.payWithCash).toHaveBeenCalledWith(ticketId, userId);
+      expect(result).toEqual(mockTransaction);
+    });
+
+    it('should handle invalid ticket ID', async () => {
+      const ticketId = 'invalid-id';
+      const userId = 'user-id';
+      const mockRequest = { user: { id: userId } };
+      
+      mockTransactionService.payWithCash.mockRejectedValue(new BadRequestException('Invalid ticket ID'));
+      
+      await expect(controller.payCash(ticketId, mockRequest))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle unauthorized user', async () => {
+      const ticketId = 'valid-ticket-id';
+      const userId = 'unauthorized-user';
+      const mockRequest = { user: { id: userId } };
+      
+      mockTransactionService.payWithCash.mockRejectedValue(
+        new BadRequestException('Only the loanee can make a payment')
+      );
+      
+      await expect(controller.payCash(ticketId, mockRequest))
+        .rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('createManualTransaction', () => {
-    it('should call service.createManualTransaction with correct parameters', async () => {
-      const transactionData = {
-        debtorId: 'debtor-id',
-        amount: 100,
-        paymentId: 'payment-id',
-        description: 'Test transaction',
-      };
+  describe('payCard', () => {
+    it('should call service.payWithCard with correct parameters', async () => {
+      const ticketId = 'valid-ticket-id';
       const userId = 'user-id';
       const mockRequest = { user: { id: userId } };
-      const expectedResult = { id: 'transaction-id' };
+      const mockTransaction = { id: 'transaction-id' };
       
-      mockTransactionService.createManualTransaction.mockResolvedValue(expectedResult);
+      mockTransactionService.payWithCard.mockResolvedValue(mockTransaction);
       
-      const result = await controller.createManualTransaction(transactionData, mockRequest);
+      const result = await controller.payCard(ticketId, mockRequest);
       
-      expect(service.createManualTransaction).toHaveBeenCalledWith(
-        userId,
-        transactionData.debtorId,
-        transactionData.amount,
-        transactionData.paymentId,
-        transactionData.description,
-      );
-      expect(result).toEqual(expectedResult);
+      expect(service.payWithCard).toHaveBeenCalledWith(ticketId, userId, 'MANUAL_CARD');
+      expect(result).toEqual(mockTransaction);
     });
 
-    it('should throw BadRequestException when required fields are missing', async () => {
-      const transactionData = {
-        debtorId: 'debtor-id',
-        amount: null,
-        paymentId: 'payment-id',
-      };
-      const mockRequest = { user: { id: 'user-id' } };
+    it('should handle payment method errors', async () => {
+      const ticketId = 'valid-ticket-id';
+      const userId = 'user-id';
+      const mockRequest = { user: { id: userId } };
       
-      await expect(controller.createManualTransaction(transactionData, mockRequest))
+      mockTransactionService.payWithCard.mockRejectedValue(
+        new BadRequestException('No payment methods found for this user')
+      );
+      
+      await expect(controller.payCard(ticketId, mockRequest))
         .rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle already paid ticket', async () => {
+      const ticketId = 'paid-ticket-id';
+      const userId = 'user-id';
+      const mockRequest = { user: { id: userId } };
       
-      expect(service.createManualTransaction).not.toHaveBeenCalled();
+      mockTransactionService.payWithCard.mockRejectedValue(
+        new BadRequestException('Ticket already payed')
+      );
+      
+      await expect(controller.payCard(ticketId, mockRequest))
+        .rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('scheduleAutomaticTransaction', () => {
-    it('should call service.scheduleAutomaticTransaction with correct parameters', async () => {
-      const scheduledDate = new Date('2023-12-31');
-      const scheduleData = {
-        debtorId: 'debtor-id',
-        amount: 100,
-        paymentId: 'payment-id',
-        scheduledDate: scheduledDate.toISOString(),
-        description: 'Test transaction',
-      };
-      const userId = 'user-id';
-      const mockRequest = { user: { id: userId } };
-      const expectedResult = { id: 'transaction-id' };
+  describe('getTransactionsByTicket', () => {
+    it('should call service.getTransactionsByTicketId with correct parameters', async () => {
+      const ticketId = 'valid-ticket-id';
+      const mockTransactions = [{ id: 'transaction-1' }, { id: 'transaction-2' }];
       
-      mockTransactionService.scheduleAutomaticTransaction.mockResolvedValue(expectedResult);
+      mockTransactionService.getTransactionsByTicketId.mockResolvedValue(mockTransactions);
       
-      const result = await controller.scheduleAutomaticTransaction(scheduleData, mockRequest);
+      const result = await controller.getTransactionsByTicket(ticketId);
       
-      expect(service.scheduleAutomaticTransaction).toHaveBeenCalledWith(
-        userId,
-        scheduleData.debtorId,
-        scheduleData.amount,
-        scheduleData.paymentId,
-        expect.any(Date),
-        scheduleData.description,
+      expect(service.getTransactionsByTicketId).toHaveBeenCalledWith(ticketId);
+      expect(result).toEqual(mockTransactions);
+    });
+
+    it('should handle empty transaction list', async () => {
+      const ticketId = 'valid-ticket-id';
+      mockTransactionService.getTransactionsByTicketId.mockResolvedValue([]);
+      
+      const result = await controller.getTransactionsByTicket(ticketId);
+      
+      expect(result).toEqual([]);
+    });
+
+    it('should handle invalid ticket ID format', async () => {
+      const ticketId = 'invalid-id';
+      mockTransactionService.getTransactionsByTicketId.mockRejectedValue(
+        new BadRequestException('Invalid ticket ID format')
       );
-      expect(result).toEqual(expectedResult);
-    });
-
-    it('should throw BadRequestException when required fields are missing', async () => {
-      const scheduleData = {
-        debtorId: 'debtor-id',
-        amount: 100,
-        paymentId: null,
-        scheduledDate: new Date().toISOString(),
-      };
-      const mockRequest = { user: { id: 'user-id' } };
       
-      await expect(controller.scheduleAutomaticTransaction(scheduleData, mockRequest))
+      await expect(controller.getTransactionsByTicket(ticketId))
         .rejects.toThrow(BadRequestException);
-      
-      expect(service.scheduleAutomaticTransaction).not.toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when scheduledDate is invalid', async () => {
-      const scheduleData = {
-        debtorId: 'debtor-id',
-        amount: 100,
-        paymentId: 'payment-id',
-        scheduledDate: 'invalid-date',
-      };
-      const mockRequest = { user: { id: 'user-id' } };
-      
-      await expect(controller.scheduleAutomaticTransaction(scheduleData, mockRequest))
-        .rejects.toThrow(BadRequestException);
-      
-      expect(service.scheduleAutomaticTransaction).not.toHaveBeenCalled();
     });
   });
 
-  describe('createCashTransaction', () => {
-    it('should call service.createCashTransaction with correct parameters', async () => {
-      const transactionData = {
-        debtorId: 'debtor-id',
-        amount: 100,
-        description: 'Test transaction',
-      };
+  describe('getTransaction', () => {
+    it('should call service.getTransactionById with correct parameters', async () => {
+      const transactionId = 'valid-transaction-id';
+      const mockTransaction = { id: transactionId };
+      
+      mockTransactionService.getTransactionById.mockResolvedValue(mockTransaction);
+      
+      const result = await controller.getTransaction(transactionId);
+      
+      expect(service.getTransactionById).toHaveBeenCalledWith(transactionId);
+      expect(result).toEqual(mockTransaction);
+    });
+  });
+
+  describe('getTransactions', () => {
+    it('should return detailed transactions for user', async () => {
       const userId = 'user-id';
       const mockRequest = { user: { id: userId } };
-      const expectedResult = { id: 'transaction-id' };
-      
-      mockTransactionService.createCashTransaction.mockResolvedValue(expectedResult);
-      
-      const result = await controller.createCashTransaction(transactionData, mockRequest);
-      
-      expect(service.createCashTransaction).toHaveBeenCalledWith(
-        userId,
-        transactionData.debtorId,
-        transactionData.amount,
-        transactionData.description,
-      );
-      expect(result).toEqual(expectedResult);
+      const mockDetailedTransactions = [
+        {
+          transaction: { _id: 'trans-1', status: 'COMPLETED' },
+          ticket: { _id: 'ticket-1', amount: 100 },
+          counterparty: { id: 'other-user-1', name: 'John' },
+          userRole: 'loaner',
+          direction: 'outgoing'
+        },
+        {
+          transaction: { _id: 'trans-2', status: 'COMPLETED' },
+          ticket: { _id: 'ticket-2', amount: 200 },
+          counterparty: { id: 'other-user-2', name: 'Jane' },
+          userRole: 'loanee',
+          direction: 'incoming'
+        }
+      ];
+
+      mockTransactionService.getDetailedTransactionsByUser = jest.fn()
+        .mockResolvedValue(mockDetailedTransactions);
+
+      const result = await controller.getTransactions(mockRequest);
+
+      expect(mockTransactionService.getDetailedTransactionsByUser)
+        .toHaveBeenCalledWith(userId);
+      expect(result).toEqual(mockDetailedTransactions);
     });
 
-    it('should throw BadRequestException when required fields are missing', async () => {
-      const transactionData = {
-        debtorId: 'debtor-id',
-        amount: null,
-      };
-      const mockRequest = { user: { id: 'user-id' } };
-      
-      await expect(controller.createCashTransaction(transactionData, mockRequest))
-        .rejects.toThrow(BadRequestException);
-      
-      expect(service.createCashTransaction).not.toHaveBeenCalled();
+    it('should handle empty transaction history', async () => {
+      const userId = 'user-id';
+      const mockRequest = { user: { id: userId } };
+
+      mockTransactionService.getDetailedTransactionsByUser = jest.fn()
+        .mockResolvedValue([]);
+
+      const result = await controller.getTransactions(mockRequest);
+
+      expect(mockTransactionService.getDetailedTransactionsByUser)
+        .toHaveBeenCalledWith(userId);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle service errors', async () => {
+      const userId = 'user-id';
+      const mockRequest = { user: { id: userId } };
+
+      mockTransactionService.getDetailedTransactionsByUser = jest.fn()
+        .mockRejectedValue(new Error('Database error'));
+
+      await expect(controller.getTransactions(mockRequest))
+        .rejects.toThrow('Database error');
     });
   });
 });

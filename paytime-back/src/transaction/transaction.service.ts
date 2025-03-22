@@ -120,4 +120,65 @@ export class TransactionService {
     }
     return transaction;
   }
+
+  async getDetailedTransactionsByUser(userId: string) {
+    const userObj = new Types.ObjectId(userId);
+    
+    // Find all tickets where the user is either loaner or loanee
+    const tickets = await this.ticketModel.find({
+      $or: [
+        { loanee: userObj },
+        { loaner: userObj }
+      ]
+    });
+    
+    if (tickets.length === 0) {
+      return [];
+    }
+    
+    const ticketIds = tickets.map(t => t._id);
+    
+ 
+    const transactions = await this.transactionModel
+      .find({ ticketId: { $in: ticketIds } })
+      .sort({ createdAt: -1 })
+      .exec();
+    
+    const ticketMap = tickets.reduce((map, ticket) => {
+      map[ticket._id.toString()] = ticket;
+      return map;
+    }, {});
+    
+    
+    const detailedTransactions = transactions.map(transaction => {
+      const ticket = ticketMap[transaction.ticketId.toString()];
+      const isLoaner = ticket.loaner.toString() === userId;
+      
+      return {
+        transaction: {
+          _id: transaction._id,
+          status: transaction.status,
+          paymentMethod: transaction.paymentMethod,
+        },
+        ticket: {
+          _id: ticket._id,
+          amount: ticket.amount,
+          type: ticket.Type,
+          place: ticket.Place,
+          dueDate: ticket.dueDate,
+          paidAt: ticket.paidAt,
+          status: ticket.status
+        },
+        counterparty: {
+          id: isLoaner ? ticket.loanee : ticket.loaner,
+          name: isLoaner ? ticket.loaneeName : ticket.loanerName,
+          role: isLoaner ? 'loanee' : 'loaner'
+        },
+        userRole: isLoaner ? 'loaner' : 'loanee',
+        direction: isLoaner ? 'outgoing' : 'incoming'
+      };
+    });
+    
+    return detailedTransactions;
+  }
 }
