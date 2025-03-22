@@ -55,7 +55,7 @@ jobs:
       with:
         context: ./paytime-back
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/paytime:backend
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/paytime:paytime-front
 
     # Build and push frontend
     - name: Build and push Frontend
@@ -63,4 +63,4 @@ jobs:
       with:
         context: ./paytime-front
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/paytime:frontend 
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/paytime:paytime-back
