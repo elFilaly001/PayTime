@@ -1,3 +1,4 @@
+# Build stage
 FROM node:20-alpine
 
 WORKDIR /app
@@ -10,4 +11,5 @@ COPY . .
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+# Add host flag to make it accessible from outside the container
+CMD ["npm", "run", "dev", "--", "--host"] 
