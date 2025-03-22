@@ -3,6 +3,7 @@ name: paytime
 services:
   web:
     container_name: paytime-front
+    image: ${DOCKERHUB_USERNAME}/paytime:frontend
     build:
       context: ./paytime-front
       dockerfile: Dockerfile
@@ -24,6 +25,7 @@ services:
 
   api:
     container_name: paytime-back
+    image: ${DOCKERHUB_USERNAME}/paytime:backend
     build:
       context: ./paytime-back
       dockerfile: Dockerfile
