@@ -81,3 +81,23 @@ networks:
 
 volumes:
   redis_data:
+
+# Add this test job to your workflow.yaml
+jobs:
+  test-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if secrets exist
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "DOCKERHUB_USERNAME is set"
+          else
+            echo "DOCKERHUB_USERNAME is not set"
+            exit 1
+          fi
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "DOCKERHUB_TOKEN is set"
+          else
+            echo "DOCKERHUB_TOKEN is not set"
+            exit 1
+          fi
