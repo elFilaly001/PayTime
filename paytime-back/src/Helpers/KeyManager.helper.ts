@@ -67,7 +67,7 @@ export class KeyManagerService implements OnModuleInit {
                 await this.addNewKey('refresh');
             }
 
-            await this.rotateKeys(false);
+            await this.rotateKeys();
 
             this.initialized = true;
         } catch (error) {
@@ -174,78 +174,59 @@ export class KeyManagerService implements OnModuleInit {
         }
     }
 
-    private async rotateKeys(forceRotation: boolean = false): Promise<void> {
-        try {
-            const now = new Date();
-            let keysUpdated = false;
+    private async rotateKeys(): Promise<void> {
+        const now = new Date();
+        
+        // Deactivate all existing active access keys
+        this.keyStore.keys
+            .filter(k => k.type === 'access' && k.active)
+            .forEach(k => k.active = false);
 
-            // Mark expired keys as inactive, but DON'T DELETE them
-            for (let i = 0; i < this.keyStore.keys.length; i++) {
-                const key = this.keyStore.keys[i];
+        // Create new active access key
+        const newAccessKey = this.generateNewKey('access');
+        this.keyStore.keys.push(newAccessKey);
 
-                if (key.active && key.expiresAt <= now) {
-                    this.keyStore.keys[i] = {
-                        ...key,
-                        active: false
-                    };
-                    keysUpdated = true;
-                }
-            }
+        // Clean up old inactive access keys (keep only the most recent inactive one)
+        const inactiveAccessKeys = this.keyStore.keys
+            .filter(k => k.type === 'access' && !k.active)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-            // Check if we need new access keys
-            const activeAccessKeys = this.getActiveKeys('access');
-            const newestAccessKey = activeAccessKeys.length > 0 ?
-                activeAccessKeys.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] : null;
-
-            // Create a new access key when the newest key is 7 days old or if we're forcing rotation
-            if (newestAccessKey) {
-                const keyAgeInDays = (now.getTime() - newestAccessKey.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-
-                if (keyAgeInDays >= 7 || forceRotation) {
-                    this.logger.debug('Creating new access key as current key is 7 days old');
-                    await this.addNewKey('access');
-                    keysUpdated = true;
-                }
-            } else {
-                await this.addNewKey('access');
-                keysUpdated = true;
-            }
-
-            // Delete third oldest active access key when we have more than 2
-            if (activeAccessKeys.length > 2) {
-                // Sort by creation date (oldest first)
-                const sortedKeys = [...activeAccessKeys].sort((a, b) =>
-                    a.createdAt.getTime() - b.createdAt.getTime()
-                );
-
-                // Get the ID of the oldest key to remove
-                const keyToRemove = sortedKeys[0];
-
-                this.logger.debug(`Removing oldest access key with ID: ${keyToRemove.id}`);
-
-                // Remove the key from our keystore
-                this.keyStore.keys = this.keyStore.keys.filter(k => k.id !== keyToRemove.id);
-                keysUpdated = true;
-            }
-
-            // Check if we need new refresh keys (similar logic to access keys)
-            const activeRefreshKeys = this.getActiveKeys('refresh');
-            const newestRefreshKey = activeRefreshKeys.length > 0 ?
-                activeRefreshKeys.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] : null;
-
-            if (!newestRefreshKey) {
-                await this.addNewKey('refresh');
-                keysUpdated = true;
-            }
-
-            if (keysUpdated) {
-                this.keyStore.lastRotation = now.toISOString();
-                await this.saveKeyStore();
-            }
-        } catch (error) {
-            this.logger.error(`Error during key rotation: ${error.message}`);
-            throw error;
+        // Remove all but the most recent inactive access key
+        if (inactiveAccessKeys.length > 1) {
+            const keysToRemove = inactiveAccessKeys.slice(1);
+            this.keyStore.keys = this.keyStore.keys
+                .filter(k => !keysToRemove.includes(k));
         }
+
+        // Handle refresh token rotation if needed
+        const activeRefreshKey = this.keyStore.keys
+            .find(k => k.type === 'refresh' && k.active);
+
+        if (!activeRefreshKey || this.isKeyExpired(activeRefreshKey)) {
+            // Deactivate current refresh key if exists
+            if (activeRefreshKey) activeRefreshKey.active = false;
+            
+            // Create new refresh key
+            const newRefreshKey = this.generateNewKey('refresh');
+            this.keyStore.keys.push(newRefreshKey);
+        }
+
+        this.keyStore.lastRotation = now.toISOString();
+        await this.saveKeyStore();
+    }
+
+    private isKeyExpired(key: KeyPair): boolean {
+        return new Date() >= new Date(key.expiresAt);
+    }
+
+    public getActiveKey(type: 'access' | 'refresh'): KeyPair {
+        return this.keyStore.keys.find(k => k.type === type && k.active);
+    }
+
+    public getVerificationKeys(type: 'access' | 'refresh'): KeyPair[] {
+        return this.keyStore.keys.filter(k => k.type === type)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, 2); // Returns active key + most recent inactive key
     }
 
     private getActiveKeys(type?: 'access' | 'refresh'): KeyPair[] {

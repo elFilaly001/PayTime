@@ -40,16 +40,6 @@ export default function SideBar() {
               <span className="font-medium">History</span>
             </NavLink>
           </li>
-          <li>
-            <NavLink
-              to="/stats"
-              className="flex items-center space-x-3 p-3 rounded-lg hover:bg-indigo-700"
-              activeClassName="bg-indigo-700"
-            >
-              <PieChart className="w-5 h-5" />
-              <span className="font-medium">Stats</span>
-            </NavLink>
-          </li>
         </ul>
       </nav>
 

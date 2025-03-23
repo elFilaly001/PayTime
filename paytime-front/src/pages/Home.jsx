@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { axiosInstance } from "../service/axiosInstence";
-import NavBar from "../components/Bars/NavBar";
 import SideBar from "../components/Bars/Sidebar";
 import Tickets from "../components/Cards/Tickets";
 import CreateTicketModal from "../components/Modals/CreateTicketModal";
@@ -238,7 +237,6 @@ export default function HomePage() {
         <>
             <Toaster />
             <div className="flex flex-col min-h-screen">
-                <NavBar />
                 <div className="flex flex-1">
                     <SideBar />
 
