@@ -28,6 +28,12 @@ jobs:
       - name: Verify Docker Auth
         run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin <<< "${{ secrets.DOCKERHUB_TOKEN }}"
 
+      - name: Run Backend Tests
+        working-directory: ./paytime-back
+        run: |
+          npm install
+          npm run test
+
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
